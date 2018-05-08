@@ -8,6 +8,6 @@
 import Foundation
 
 
-open class File: SeekableStream {
+open class File: StreamsKit.SeekableStream {
     
 }

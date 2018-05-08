@@ -7,7 +7,7 @@
 
 import Foundation
 
-open class SeekableStream: Stream {
+open class SeekableStream: StreamsKit.Stream {
     
     open func lowLevelSeek(to offset: Int, whence: Int32) throws -> Int {
         fatalError("Not implemented")

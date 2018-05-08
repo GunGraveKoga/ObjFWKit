@@ -35,7 +35,7 @@ open class Stream {
         return newBuffer
     }
     
-    public enum StreamsKitError<StreamType>: Error where StreamType: SKStream {
+    public enum StreamsKitError<StreamType>: Error where StreamType: StreamsKit.Stream {
         case writeFailed(stream: StreamType, requestedLength: Int, bytesWritten: Int, errNo: Int32)
     }
     
