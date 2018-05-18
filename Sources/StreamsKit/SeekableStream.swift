@@ -8,16 +8,23 @@
 import Foundation
 
 open class SeekableStream: StreamsKit.Stream {
+    #if os(Windows)
+    public typealias offset_t = __int64
+    #elseif os(Linux)
+    public typealias offset_t = off64_t
+    #else
+    public typealias offset_t = off_t
+    #endif
     
-    open func lowLevelSeek(to offset: Int, whence: Int32) throws -> Int {
-        fatalError("Not implemented")
+    open func lowLevelSeek(to offset: SeekableStream.offset_t, whence: Int32) throws -> SeekableStream.offset_t {
+        throw StreamsKitError.notImplemented(method: #function, inStream: type(of: self))
     }
     
-    open func seek(to offset: Int, whence: Int32) throws -> Int {
+    open func seek(to offset: SeekableStream.offset_t, whence: Int32) throws -> SeekableStream.offset_t {
         var _offset = offset
         
         if whence == SEEK_CUR {
-            _offset -= _readBufferLength
+            _offset -= SeekableStream.offset_t(_readBufferLength)
         }
         
         _offset = try self.lowLevelSeek(to: _offset, whence: whence)

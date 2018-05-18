@@ -9,7 +9,7 @@ import Foundation
 
 open class Stream {
     
-    internal static var MIN_READ_SIZE = 512
+    internal static let MIN_READ_SIZE = 512
     
     
     internal var _readBufferLength: Int = 0
@@ -35,36 +35,46 @@ open class Stream {
         return newBuffer
     }
     
-    public enum StreamsKitError<StreamType>: Error where StreamType: StreamsKit.Stream {
-        case writeFailed(stream: StreamType, requestedLength: Int, bytesWritten: Int, errNo: Int32)
+    open var writeBuffered: Bool = false
+    internal var _blocking: Bool = true
+    
+    open var isBlocking: Bool {
+        get {
+            return _blocking
+        }
     }
     
-    open var writeBuffered: Bool = false
-    open var blocking: Bool = true
+    open func setBlocking(_ enable: Bool) throws {
+        throw StreamsKitError.notImplemented(method: #function, inStream: type(of: self))
+    }
+    
+    open func fileDescriptorForReading() throws -> Int32 {
+        throw StreamsKitError.notImplemented(method: #function, inStream: type(of: self))
+    }
+    
+    open func fileDescriptorForWriting() throws -> Int32 {
+        throw StreamsKitError.notImplemented(method: #function, inStream: type(of: self))
+    }
     
     open func lowLevelRead(into buffer: inout UnsafeMutableRawPointer, length: Int) throws -> Int {
-        fatalError("Not implemeted")
+        throw StreamsKitError.notImplemented(method: #function, inStream: type(of: self))
     }
     
     @discardableResult
     open func lowLevelWrite(_ buffer: UnsafeRawPointer, length: Int) throws -> Int {
-        fatalError("Not implemented")
+        throw StreamsKitError.notImplemented(method: #function, inStream: type(of: self))
     }
     
-    open var lowLevelIsAtEndOfStream: Bool {
-        get {
-            fatalError("Not implemented")
-        }
+    open func lowLevelIsAtEndOfStream() throws -> Bool {
+        throw StreamsKitError.notImplemented(method: #function, inStream: type(of: self))
     }
     
-    open var atEndOfStream: Bool {
-        get {
-            if _readBufferLength > 0 {
-                return true
-            }
-            
-            return self.lowLevelIsAtEndOfStream
+    open func atEndOfStream() throws -> Bool {
+        if _readBufferLength > 0 {
+            return true
         }
+        
+        return try self.lowLevelIsAtEndOfStream()
     }
     
     open var hasDataInReadBuffer: Bool {
@@ -120,22 +130,17 @@ open class Stream {
         }
     }
     
-    @discardableResult
-    open func write(buffer: UnsafeRawPointer, length: Int) throws -> Int {
+    open func write(buffer: UnsafeRawPointer, length: Int) throws {
         if !writeBuffered {
             let bytesWritten = try self.lowLevelWrite(buffer, length: length)
             
-            if blocking && bytesWritten < length {
-                throw StreamsKitError.writeFailed(stream: self, requestedLength: length, bytesWritten: bytesWritten, errNo: 0)
+            if _blocking && bytesWritten < length {
+                throw StreamsKitError.writeFailed(stream: self, requestedLength: length, bytesWritten: bytesWritten, error: 0)
             }
-            
-            return bytesWritten
         } else {
             _writeBuffer = self._resizeIntenalBuffer(_writeBuffer, size: _writeBufferLength + length)
             _writeBuffer.baseAddress!.advanced(by: _writeBufferLength).copyBytes(from: buffer, count: length)
             _writeBufferLength += length
-            
-            return length
         }
     }
     
@@ -151,7 +156,7 @@ open class Stream {
         _writeBufferLength = 0
     }
     
-    deinit {
+    open func close() throws {
         if _writeBuffer != nil {
             _writeBuffer.deallocate()
         }
@@ -160,5 +165,9 @@ open class Stream {
             _readBuffer = nil
             _readBufferMemmory.deallocate()
         }
+        
+        _readBufferLength = 0
+        _writeBufferLength = 0
+        self.writeBuffered = false
     }
 }
