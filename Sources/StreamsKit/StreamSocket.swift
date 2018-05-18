@@ -838,70 +838,31 @@ open class StreamSocket: StreamsKit.Stream {
         #if os(Windows)
             var v = u_long(newValue ? 1 : 0)
             
-            guard ioctlsocket(_socket, FIONBIO, UnsafeMutablePointer(&v)) != SOCKET_ERROR else {
+            guard ioctlsocket(_socket.rawValue, FIONBIO, UnsafeMutablePointer(&v)) != SOCKET_ERROR else {
                 throw StreamsKitError.setOptionFailed(stream: self, errNo: _socket_errno())
             }
             
             _blocking = enable
         #else
-            var readImplemented = false, writeImplemented = false
             
-            do {
-                var readFlags = fcntl(try self.fileDescriptorForReading(), F_GETFL)
-                
-                guard readFlags != -1 else {
-                    throw StreamsKitError.setOptionFailed(stream: self, error: _socket_errno())
-                }
-                
-                readImplemented = true
-                
-                if enable {
-                    readFlags &= ~O_NONBLOCK
-                } else {
-                    readFlags |= O_NONBLOCK
-                }
-                
-                guard fcntl(try self.fileDescriptorForReading(), F_SETFL, readFlags) != -1 else {
-                    throw StreamsKitError.setOptionFailed(stream: self, error: _socket_errno())
-                }
-                
-            } catch let error as NSError {
-                if error.domain != StreamsKitErrorDomain || error.code != kPOSIXErrorENOSYS {
-                    throw error
-                }
+            var readFlags = fcntl(_socket.rawValue, F_GETFL)
+            
+            guard readFlags != -1 else {
+                throw StreamsKitError.setOptionFailed(stream: self, error: _socket_errno())
             }
             
-            do {
-                var writeFlags = fcntl(try self.fileDescriptorForWriting(), F_GETFL)
-                
-                writeImplemented = true
-                
-                guard writeFlags != -1 else {
-                    throw StreamsKitError.setOptionFailed(stream: self, error: _socket_errno())
-                }
-                
-                if enable {
-                    writeFlags &= ~O_NONBLOCK
-                } else {
-                    writeFlags |= O_NONBLOCK
-                }
-                
-                guard fcntl(try self.fileDescriptorForWriting(), F_SETFL, UnsafeMutablePointer(&writeFlags)) != -1 else {
-                    throw StreamsKitError.setOptionFailed(stream: self, error: _socket_errno())
-                }
-                
-            } catch let error as NSError {
-                if error.domain != StreamsKitErrorDomain || error.code != kPOSIXErrorENOSYS {
-                    throw error
-                }
+            if enable {
+                readFlags &= ~O_NONBLOCK
+            } else {
+                readFlags |= O_NONBLOCK
             }
             
-            guard readImplemented || writeImplemented else {
-                throw StreamsKitError.notImplemented(method: #function, inStream: type(of: self))
+            guard fcntl(_socket.rawValue, F_SETFL, readFlags) != -1 else {
+                throw StreamsKitError.setOptionFailed(stream: self, error: _socket_errno())
             }
-            
-            _blocking = enable
         #endif
+        
+        _blocking = enable
     }
     
     open override func close() throws {
