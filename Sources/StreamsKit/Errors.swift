@@ -177,4 +177,8 @@ public enum StreamsKitError {
     public static func acceptFailed<T>(socket: T, error: Int32) -> NSError where T: StreamsKit.TCPSocket {
         return StreamsKitPOSIXError(error, userInfo: [StreamKey: socket])
     }
+    
+    public static func truncatedData() -> NSError {
+        return NSError(domain: StreamsKitErrorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: ""])
+    }
 }
