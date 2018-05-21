@@ -700,6 +700,15 @@ open class Stream {
         return data
     }
     
+    @discardableResult
+    open func writeData(_ data: Data) throws -> Int {
+        try data.withUnsafeBytes {(buffer: UnsafePointer<UInt8>) in
+            try self.write(buffer: buffer, length: data.count)
+        }
+        
+        return data.count
+    }
+    
     open func readString(withLength length: Int, encoding: String.Encoding = .utf8) throws -> String? {
         let data = try self.readData(bytesCount: length)
         
@@ -990,6 +999,42 @@ open class Stream {
         }
         
         return ret
+    }
+    
+    @discardableResult
+    open func writeString(_ string: String, withEncoding encoding: String.Encoding = .utf8) throws -> Int {
+        let bufferLength = string.lengthOfBytes(using: encoding)
+        
+        guard bufferLength != 0 else {
+            throw StreamsKitError.invalidArgument()
+        }
+        
+        guard let characters = string.cString(using: encoding) else {
+            throw StreamsKitError.invalidArgument()
+        }
+        
+        try characters.withUnsafeBytes {
+            try self.write(buffer: $0.baseAddress!, length: bufferLength)
+        }
+        
+        return bufferLength
+    }
+    
+    @discardableResult
+    open func writeLine(_ string: String, withEncoding encoding: String.Encoding = .utf8) throws -> Int {
+        return try self.writeString(string + "\n", withEncoding: encoding)
+    }
+    
+    @discardableResult
+    open func writeString(format: String, _ args: CVarArg...) throws -> Int {
+        let res = String(format: format, arguments: args)
+        let length = res.lengthOfBytes(using: .utf8)
+        
+        try res.withCString {
+            try self.write(buffer: $0, length: length)
+        }
+        
+        return length
     }
     
     open func flushWriteBuffer() throws {
