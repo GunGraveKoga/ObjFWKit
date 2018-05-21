@@ -181,4 +181,8 @@ public enum StreamsKitError {
     public static func truncatedData() -> NSError {
         return NSError(domain: StreamsKitErrorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: ""])
     }
+    
+    public static func invalidArgument() -> NSError {
+        return NSError(domain: StreamsKitErrorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: ""])
+    }
 }

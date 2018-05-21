@@ -33,6 +33,8 @@ open class Stream {
     internal var _writeBufferLength: Int = 0
     internal var _writeBuffer: UnsafeMutableRawBufferPointer!
     
+    internal var _waitingForDelimiter: Bool = false
+    
     internal func _resizeIntenalBuffer(_ buffer: UnsafeMutableRawBufferPointer?, size: Int) -> UnsafeMutableRawBufferPointer {
         
         if buffer == nil {
@@ -550,7 +552,7 @@ open class Stream {
             throw error
         }
         
-        return Data.init(bytesNoCopy: buffer, count: count, deallocator: .custom({$0.deallocate(bytes: $1, alignedTo: MemoryLayout<UInt8>.alignment)}))
+        return Data(bytesNoCopy: buffer, count: count, deallocator: .custom({$0.deallocate(bytes: $1, alignedTo: MemoryLayout<UInt8>.alignment)}))
     }
     
     open func readDataUntilEndOfStream() throws -> Data {
@@ -570,6 +572,424 @@ open class Stream {
         }
         
         return data
+    }
+    
+    open func tryReadData(tillDelimiter delimiter: Data) throws -> Data? {
+        
+        return try delimiter.withUnsafeBytes { (delimiterPtr: UnsafePointer<UInt8>) -> Data? in
+            var ret: Data? = nil
+            var j = Int(0)
+            
+            if !_waitingForDelimiter && _readBuffer != nil {
+                let readBuffer = _readBuffer.assumingMemoryBound(to: UInt8.self)
+                
+                for i in 0..<_readBufferLength {
+                    let delimiterIndex = j
+                    j += 1
+                    
+                    if readBuffer[i] != delimiterPtr[delimiterIndex] {
+                        j = 0
+                    }
+                    
+                    if j == delimiter.count {
+                        ret = Data(bytes: _readBuffer, count: i + 1 - delimiter.count)
+                        
+                        _readBuffer = _readBuffer.advanced(by: i + 1)
+                        _readBufferLength -= i + 1
+                        _waitingForDelimiter = false
+                        
+                        return ret
+                    }
+                }
+            }
+            
+            if try self.lowLevelIsAtEndOfStream() {
+                guard _readBuffer != nil else {
+                    _waitingForDelimiter = false
+                    
+                    return nil
+                }
+                
+                if _readBufferLength > 0 {
+                    ret = Data(bytes: _readBuffer, count: _readBufferLength)
+                }
+                
+                _readBufferMemmory.deallocate()
+                _readBuffer = nil
+                _readBufferLength = 0
+                _waitingForDelimiter = false
+                
+                return ret
+            }
+            
+            let pageSize = NSPageSize()
+            var buffer = UnsafeMutableRawPointer.allocate(bytes: pageSize, alignedTo: MemoryLayout<UInt8>.alignment)
+            
+            defer {
+                buffer.deallocate(bytes: pageSize, alignedTo: MemoryLayout<UInt8>.alignment)
+            }
+            
+            let bufferLength = try self.lowLevelRead(into: &buffer, length: pageSize)
+            
+            let readBuffer = buffer.assumingMemoryBound(to: UInt8.self)
+            
+            for i in 0..<bufferLength {
+                let delimiterIndex = j
+                j += 1
+                
+                if readBuffer[i] != delimiterPtr[delimiterIndex] {
+                    j = 0
+                }
+                
+                if j == delimiter.count {
+                    let retLength = _readBufferLength + i + 1 - delimiter.count
+                    
+                    ret = Data()
+                    
+                    if _readBuffer != nil && _readBufferLength <= retLength {
+                        ret?.append(_readBuffer.assumingMemoryBound(to: UInt8.self), count: _readBufferLength)
+                    } else if _readBuffer != nil {
+                        ret?.append(_readBuffer.assumingMemoryBound(to: UInt8.self), count: retLength)
+                    }
+                    
+                    if i >= delimiter.count {
+                        ret?.append(readBuffer, count: i + 1 - delimiter.count)
+                    }
+                    
+                    _readBufferMemmory.deallocate()
+                    _readBuffer = nil
+                    _readBufferLength = 0
+                    
+                    _readBufferMemmory = UnsafeMutableRawBufferPointer.allocate(count: bufferLength - i - 1)
+                    _readBuffer = _readBufferMemmory.baseAddress
+                    
+                    _readBuffer.copyBytes(from: buffer.advanced(by: i + 1), count: bufferLength - i - 1)
+                    _readBufferLength = bufferLength - i - 1
+                    
+                    _waitingForDelimiter = false
+                    
+                    return ret
+                }
+            }
+            
+            if bufferLength > 0 {
+                _readBuffer = nil
+                _readBufferMemmory = self._resizeIntenalBuffer(_readBufferMemmory, size: bufferLength)
+                _readBuffer = _readBufferMemmory.baseAddress
+                
+                _readBuffer.advanced(by: _readBufferLength).copyBytes(from: buffer, count: bufferLength)
+                _readBufferLength += bufferLength
+                
+            }
+            
+            _waitingForDelimiter = true
+            
+            return nil
+        }
+    }
+    
+    open func readData(tillDelimiter delimiter: Data) throws -> Data? {
+        var data: Data? = nil
+        
+        while (data = try self.tryReadData(tillDelimiter: delimiter), data).1 == nil {
+            guard try !self.atEndOfStream() else {
+                return nil
+            }
+        }
+        
+        return data
+    }
+    
+    open func readString(withLength length: Int, encoding: String.Encoding = .utf8) throws -> String? {
+        let data = try self.readData(bytesCount: length)
+        
+        return String(data: data, encoding: encoding)
+    }
+    
+    open func tryReadLine(withEncoding encoding: String.Encoding = .utf8) throws -> String? {
+        var retLength: Int
+        var ret: String? = nil
+        
+        if !_waitingForDelimiter && _readBuffer != nil {
+            let readBuffer = _readBuffer!.assumingMemoryBound(to: CChar.self)
+            for i in 0..<_readBufferLength {
+                if readBuffer[i] == 0xA || readBuffer[i] == 0x0 {
+                    retLength = i
+                    
+                    if i > 0 && readBuffer[i - 1] == 0xD {
+                        retLength -= 1
+                    }
+                    
+                    ret = String(data: Data(bytesNoCopy: _readBuffer, count: retLength, deallocator: .none), encoding: encoding)
+                    
+                    _readBuffer = _readBuffer.advanced(by: i + 1)
+                    _readBufferLength -= i + 1
+                    _waitingForDelimiter = false
+                    
+                    return ret
+                }
+            }
+        }
+        
+        if try self.lowLevelIsAtEndOfStream() {
+            guard _readBuffer != nil else {
+                _waitingForDelimiter = false
+                return nil
+            }
+            
+            let readBuffer = _readBuffer.assumingMemoryBound(to: CChar.self)
+            retLength = _readBufferLength
+            
+            if retLength > 0 && readBuffer[retLength - 1] == 0xD {
+                retLength -= 1
+            }
+            
+            ret = String(data: Data(bytesNoCopy: _readBuffer, count: retLength, deallocator: .none), encoding: encoding)
+            
+            _readBuffer = nil
+            _readBufferLength = 0
+            _readBufferMemmory.deallocate()
+            _waitingForDelimiter = false
+            
+            return ret
+        }
+        
+        let pageSize = NSPageSize()
+        var buffer = UnsafeMutableRawPointer.allocate(bytes: pageSize, alignedTo: MemoryLayout<UInt8>.alignment)
+        
+        defer {
+            buffer.deallocate(bytes: pageSize, alignedTo: MemoryLayout<UInt8>.alignment)
+        }
+        
+        let bufferLength = try self.lowLevelRead(into: &buffer, length: pageSize)
+        
+        let readBuffer = buffer.assumingMemoryBound(to: CChar.self)
+        
+        for i in 0..<bufferLength {
+            if readBuffer[i] == 0xA || readBuffer[i] == 0x0 {
+                do {
+                    retLength = _readBufferLength + i
+                    
+                    if i > 0 && readBuffer[i - 1] == 0xD {
+                        retLength -= 1
+                    }
+                    
+                    let retCStringLength = _readBufferLength + retLength
+                    var retCString = UnsafeMutableRawPointer.allocate(bytes: retCStringLength, alignedTo: MemoryLayout<UInt8>.alignment)
+                    
+                    defer {
+                        retCString.deallocate(bytes: retCStringLength, alignedTo: MemoryLayout<UInt8>.alignment)
+                    }
+                    
+                    if _readBuffer != nil {
+                        retCString.copyBytes(from: _readBuffer, count: _readBufferLength)
+                    }
+                    
+                    retCString.advanced(by: _readBufferLength).copyBytes(from: buffer, count: retLength)
+                    
+                    ret = String(data: Data(bytesNoCopy: retCString, count: retCStringLength, deallocator: .none), encoding: encoding)
+                    
+                    guard ret != nil else {
+                        if bufferLength > 0 {
+                            _readBuffer = nil
+                            _readBufferMemmory = self._resizeIntenalBuffer(_readBufferMemmory, size: bufferLength)
+                            _readBuffer = _readBufferMemmory.baseAddress!
+                            
+                            _readBuffer.advanced(by: _readBufferLength).copyBytes(from: buffer, count: bufferLength)
+                            _readBufferLength += bufferLength
+                        }
+                        
+                        return nil
+                    }
+                    
+                    _readBufferMemmory.deallocate()
+                    _readBuffer = nil
+                    _readBufferLength = 0
+                    
+                    _readBufferMemmory = UnsafeMutableRawBufferPointer.allocate(count: bufferLength - i - 1)
+                    _readBuffer = _readBufferMemmory.baseAddress
+                    _readBufferLength = bufferLength - i - 1
+                    
+                    _readBuffer.copyBytes(from: buffer.advanced(by: i + 1), count: _readBufferLength)
+                    _waitingForDelimiter = false
+                    
+                    return ret
+                }
+            }
+        }
+        
+        if bufferLength > 0 {
+            _readBuffer = nil
+            _readBufferMemmory = self._resizeIntenalBuffer(_readBufferMemmory, size: _readBufferLength)
+            _readBuffer = _readBufferMemmory.baseAddress
+            
+            _readBuffer.advanced(by: _readBufferLength).copyBytes(from: buffer, count: bufferLength)
+            _readBufferLength += bufferLength
+        }
+        
+        _waitingForDelimiter = true
+        
+        return nil
+    }
+    
+    open func readLine(withEncoding encoding: String.Encoding = .utf8) throws -> String? {
+        var line: String? = nil
+        
+        while (line = try self.tryReadLine(withEncoding: encoding), line).1 == nil {
+            guard try !self.atEndOfStream() else {
+                return nil
+            }
+        }
+        
+        return line
+    }
+    
+    open func tryReadString(tillDelimiter delimiter: String, encoding: String.Encoding = .utf8) throws -> String? {
+        var delimiterLength = delimiter.lengthOfBytes(using: encoding)
+        
+        guard delimiterLength != 0 else {
+            throw StreamsKitError.invalidArgument()
+        }
+        
+        guard let delimiterCString = delimiter.cString(using: encoding) else {
+            throw StreamsKitError.invalidArgument()
+        }
+        
+        var ret: String? = nil
+        var j = Int(0)
+        
+        if !_waitingForDelimiter && _readBuffer != nil {
+            let readBuffer = _readBuffer.assumingMemoryBound(to: CChar.self)
+            
+            for i in 0..<_readBufferLength {
+                let delimiterIndex = j
+                j += 1
+                
+                if readBuffer[i] != delimiterCString[delimiterIndex] {
+                    j = 0
+                }
+                
+                if j == delimiterLength || readBuffer[i] == 0x0 {
+                    if readBuffer[i] == 0x0 {
+                        delimiterLength = 1
+                    }
+                    
+                    ret = String(data: Data(bytesNoCopy: _readBuffer, count: i + 1 - delimiterLength, deallocator: .none), encoding: encoding)
+                    
+                    _readBuffer = _readBuffer.advanced(by: i + 1)
+                    _readBufferLength -= i + 1
+                    _waitingForDelimiter = false
+                    
+                    return ret
+                }
+            }
+        }
+        
+        if try self.lowLevelIsAtEndOfStream() {
+            guard _readBuffer != nil else {
+                _waitingForDelimiter = false
+                
+                return nil
+            }
+            
+            
+        }
+        
+        let pageSize = NSPageSize()
+        var buffer = UnsafeMutableRawPointer.allocate(bytes: pageSize, alignedTo: MemoryLayout<UInt8>.alignment)
+        
+        defer {
+            buffer.deallocate(bytes: pageSize, alignedTo: MemoryLayout<UInt8>.alignment)
+        }
+        
+        let bufferLength = try self.lowLevelRead(into: &buffer, length: pageSize)
+        let readBuffer = buffer.assumingMemoryBound(to: CChar.self)
+        
+        for i in 0..<bufferLength {
+            let delimiterIndex = j
+            j += 1
+            
+            if readBuffer[i] != delimiterCString[delimiterIndex] {
+                j = 0
+            }
+            
+            if j == delimiterLength || readBuffer[i] == 0x0 {
+                if readBuffer[i] == 0x0 {
+                    delimiterLength = 1
+                }
+                
+                let retLength = _readBufferLength + i + 1 - delimiterLength
+                
+                let retCString = UnsafeMutableRawPointer.allocate(bytes: retLength, alignedTo: MemoryLayout<UInt8>.alignment)
+                
+                defer {
+                    retCString.deallocate(bytes: retLength, alignedTo: MemoryLayout<UInt8>.alignment)
+                }
+                
+                if _readBuffer != nil && _readBufferLength <= retLength {
+                    retCString.copyBytes(from: _readBuffer, count: _readBufferLength)
+                } else if _readBuffer != nil {
+                    retCString.copyBytes(from: _readBuffer, count: retLength)
+                }
+                
+                if i >= delimiterLength {
+                    retCString.advanced(by: _readBufferLength).copyBytes(from: buffer, count: i + 1 - delimiterLength)
+                }
+                
+                ret = String(data: Data(bytesNoCopy: retCString, count: retLength, deallocator: .none), encoding: encoding)
+                
+                guard ret != nil else {
+                    if bufferLength > 0 {
+                        _readBuffer = nil
+                        _readBufferMemmory = self._resizeIntenalBuffer(_readBufferMemmory, size: bufferLength)
+                        _readBuffer = _readBufferMemmory.baseAddress!
+                        
+                        _readBuffer.advanced(by: _readBufferLength).copyBytes(from: buffer, count: bufferLength)
+                        _readBufferLength += bufferLength
+                    }
+                    
+                    return nil
+                }
+                
+                _readBufferMemmory.deallocate()
+                _readBuffer = nil
+                _readBufferLength = 0
+                
+                _readBufferMemmory = UnsafeMutableRawBufferPointer.allocate(count: bufferLength - i - 1)
+                _readBuffer = _readBufferMemmory.baseAddress
+                _readBuffer.copyBytes(from: buffer.advanced(by: i + 1), count: bufferLength - i - 1)
+                _readBufferLength = bufferLength - i - 1
+                
+                _waitingForDelimiter = false
+                
+                return ret
+            }
+        }
+        
+        if bufferLength > 0 {
+            _readBuffer = nil
+            _readBufferMemmory = self._resizeIntenalBuffer(_readBufferMemmory, size: _readBufferLength)
+            _readBuffer = _readBufferMemmory.baseAddress
+            
+            _readBuffer.advanced(by: _readBufferLength).copyBytes(from: buffer, count: bufferLength)
+            _readBufferLength += bufferLength
+        }
+        
+        _waitingForDelimiter = true
+        
+        return nil
+    }
+    
+    open func readString(tillDelimiter delimiter: String, encoding: String.Encoding = .utf8) throws -> String? {
+        var ret: String? = nil
+        
+        while (ret = try self.tryReadString(tillDelimiter: delimiter, encoding: encoding), ret).1 == nil {
+            guard try !self.atEndOfStream() else {
+                return nil
+            }
+        }
+        
+        return ret
     }
     
     open func flushWriteBuffer() throws {
