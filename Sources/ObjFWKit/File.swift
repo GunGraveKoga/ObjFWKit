@@ -37,10 +37,10 @@ fileprivate func parseMode(_ mode: String) -> Int32 {
     }
 }
 
-open class File: SeekableStream {
+open class OFFile: OFSeekableStream {
     public static let INVALID_FILE_HANDLE: Int32 = -1
     
-    internal var _handle: Int32 = File.INVALID_FILE_HANDLE
+    internal var _handle: Int32 = OFFile.INVALID_FILE_HANDLE
     internal var _atEndOfStream: Bool = false
     
     public convenience init(withPath filePath: String, mode: String) throws {
@@ -61,7 +61,7 @@ open class File: SeekableStream {
         #endif
         
         guard handle != -1 else {
-            throw StreamsKitError.openFailed(path: filePath, mode: mode, error: errno)
+            throw OFException.openFailed(path: filePath, mode: mode, error: errno)
         }
         
         self.init(withHandle: handle)
@@ -72,23 +72,23 @@ open class File: SeekableStream {
     }
     
     open override func lowLevelIsAtEndOfStream() throws -> Bool {
-        guard _handle != File.INVALID_FILE_HANDLE else {
-            throw StreamsKitError.notOpen(stream: self)
+        guard _handle != OFFile.INVALID_FILE_HANDLE else {
+            throw OFException.notOpen(stream: self)
         }
         
         return _atEndOfStream
     }
     
     open override func lowLevelRead(into buffer: inout UnsafeMutableRawPointer, length: Int) throws -> Int {
-        guard _handle != File.INVALID_FILE_HANDLE else {
-            throw StreamsKitError.notOpen(stream: self)
+        guard _handle != OFFile.INVALID_FILE_HANDLE else {
+            throw OFException.notOpen(stream: self)
         }
         
         var ret: Int
         
         #if os(Windows)
         guard length <= UInt32.max else {
-            throw StreamsKitError.outOfRange
+            throw OFException.outOfRange
         }
             
         ret = MinGWCrt.read(_handle, buffer, UInt32(length))
@@ -99,7 +99,7 @@ open class File: SeekableStream {
         #endif
         
         guard ret >= 0 else {
-            throw StreamsKitError.readFailed(stream: self, requestedLength: length, error: errno)
+            throw OFException.readFailed(stream: self, requestedLength: length, error: errno)
         }
         
         if ret == 0 {
@@ -110,15 +110,15 @@ open class File: SeekableStream {
     }
     
     open override func lowLevelWrite(_ buffer: UnsafeRawPointer, length: Int) throws -> Int {
-        guard _handle != File.INVALID_FILE_HANDLE else {
-            throw StreamsKitError.notOpen(stream: self)
+        guard _handle != OFFile.INVALID_FILE_HANDLE else {
+            throw OFException.notOpen(stream: self)
         }
         
         var bytesWriten: Int
         
         #if os(Windows)
         guard length <= Int32.max else {
-            throw StreamsKitError.outOfRange
+            throw OFException.outOfRange
         }
         
         let _bytesWriten = MinGWCrt.write(_handle, buffer, Int32(length))
@@ -130,18 +130,18 @@ open class File: SeekableStream {
         #endif
         
         guard bytesWriten >= 0 else {
-            throw StreamsKitError.writeFailed(stream: self, requestedLength: length, bytesWritten: 0, error: errno)
+            throw OFException.writeFailed(stream: self, requestedLength: length, bytesWritten: 0, error: errno)
         }
         
         return bytesWriten
     }
     
-    open override func lowLevelSeek(to offset: SeekableStream.offset_t, whence: Int32) throws -> SeekableStream.offset_t {
-        guard _handle != File.INVALID_FILE_HANDLE else {
-            throw StreamsKitError.notOpen(stream: self)
+    open override func lowLevelSeek(to offset: OFSeekableStream.offset_t, whence: Int32) throws -> OFSeekableStream.offset_t {
+        guard _handle != OFFile.INVALID_FILE_HANDLE else {
+            throw OFException.notOpen(stream: self)
         }
         
-        var ret: SeekableStream.offset_t
+        var ret: OFSeekableStream.offset_t
         
         #if os(Windows)
         ret = _lseeki64(_handle, offset, whence)
@@ -152,7 +152,7 @@ open class File: SeekableStream {
         #endif
         
         guard ret != -1 else {
-            throw StreamsKitError.seekFailed(stream: self, offset: offset, whence: whence, error: errno)
+            throw OFException.seekFailed(stream: self, offset: offset, whence: whence, error: errno)
         }
         
         _atEndOfStream = false
@@ -161,7 +161,7 @@ open class File: SeekableStream {
     }
     
     open override func close() throws {
-        if _handle != File.INVALID_FILE_HANDLE {
+        if _handle != OFFile.INVALID_FILE_HANDLE {
             #if os(Windows)
             MinGWCrt.close(_handle)
             #elseif os(Linux)
@@ -171,7 +171,7 @@ open class File: SeekableStream {
             #endif
         }
         
-        _handle = File.INVALID_FILE_HANDLE
+        _handle = OFFile.INVALID_FILE_HANDLE
         
         try super.close()
     }

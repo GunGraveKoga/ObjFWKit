@@ -7,12 +7,12 @@
 
 import Foundation
 
-open class Stream {
+open class OFStream {
     public enum ByteOrder {
         case bigEndian
         case littleEndian
         
-        public static let current: Stream.ByteOrder = {
+        public static let current: OFStream.ByteOrder = {
             let number: UInt32 = 0x12345678
             
             if number == number.bigEndian {
@@ -61,20 +61,20 @@ open class Stream {
     }
     
     open func setBlocking(_ enable: Bool) throws {
-        throw StreamsKitError.notImplemented(method: #function, inStream: type(of: self))
+        throw OFException.notImplemented(method: #function, inStream: type(of: self))
     }
     
     open func lowLevelRead(into buffer: inout UnsafeMutableRawPointer, length: Int) throws -> Int {
-        throw StreamsKitError.notImplemented(method: #function, inStream: type(of: self))
+        throw OFException.notImplemented(method: #function, inStream: type(of: self))
     }
     
     @discardableResult
     open func lowLevelWrite(_ buffer: UnsafeRawPointer, length: Int) throws -> Int {
-        throw StreamsKitError.notImplemented(method: #function, inStream: type(of: self))
+        throw OFException.notImplemented(method: #function, inStream: type(of: self))
     }
     
     open func lowLevelIsAtEndOfStream() throws -> Bool {
-        throw StreamsKitError.notImplemented(method: #function, inStream: type(of: self))
+        throw OFException.notImplemented(method: #function, inStream: type(of: self))
     }
     
     open func atEndOfStream() throws -> Bool {
@@ -91,15 +91,15 @@ open class Stream {
     
     open func read(into buffer: inout UnsafeMutableRawPointer, length: Int) throws -> Int {
         if _readBufferLength == 0 {
-            if length < Stream.MIN_READ_SIZE {
-                var tmp = UnsafeMutableRawPointer.allocate(bytes: Stream.MIN_READ_SIZE, alignedTo: MemoryLayout<UInt8>.size)
+            if length < OFStream.MIN_READ_SIZE {
+                var tmp = UnsafeMutableRawPointer.allocate(bytes: OFStream.MIN_READ_SIZE, alignedTo: MemoryLayout<UInt8>.size)
                 tmp.initializeMemory(as: UInt8.self, to: 0)
                 
                 defer {
-                    tmp.deallocate(bytes: Stream.MIN_READ_SIZE, alignedTo: MemoryLayout<UInt8>.size)
+                    tmp.deallocate(bytes: OFStream.MIN_READ_SIZE, alignedTo: MemoryLayout<UInt8>.size)
                 }
                 
-                let bytesRead = try self.lowLevelRead(into: &tmp, length: Stream.MIN_READ_SIZE)
+                let bytesRead = try self.lowLevelRead(into: &tmp, length: OFStream.MIN_READ_SIZE)
                 
                 if bytesRead > length {
                     buffer.copyBytes(from: tmp, count: length)
@@ -143,7 +143,7 @@ open class Stream {
         
         while readLength < length {
             if try self.atEndOfStream() {
-                throw StreamsKitError.truncatedData()
+                throw OFException.truncatedData()
             }
             
             var tmp = buffer + readLength
@@ -156,7 +156,7 @@ open class Stream {
             let bytesWritten = try self.lowLevelWrite(buffer, length: length)
             
             if _blocking && bytesWritten < length {
-                throw StreamsKitError.writeFailed(stream: self, requestedLength: length, bytesWritten: bytesWritten, error: 0)
+                throw OFException.writeFailed(stream: self, requestedLength: length, bytesWritten: bytesWritten, error: 0)
             }
         } else {
             _writeBuffer = self._resizeIntenalBuffer(_writeBuffer, size: _writeBufferLength + length)
@@ -182,7 +182,7 @@ open class Stream {
         return try self._readInteger()
     }
     
-    open func readInt16(byteOrder: Stream.ByteOrder = .current) throws -> UInt16 {
+    open func readInt16(byteOrder: OFStream.ByteOrder = .current) throws -> UInt16 {
         let result: UInt16 = try self._readInteger()
         
         switch byteOrder {
@@ -193,7 +193,7 @@ open class Stream {
         }
     }
     
-    open func readInt32(byteOrder: Stream.ByteOrder = .current) throws -> UInt32 {
+    open func readInt32(byteOrder: OFStream.ByteOrder = .current) throws -> UInt32 {
         let result: UInt32 = try self._readInteger()
         
         switch byteOrder {
@@ -204,7 +204,7 @@ open class Stream {
         }
     }
     
-    open func readInt64(byteOrder: Stream.ByteOrder = .current) throws -> UInt64 {
+    open func readInt64(byteOrder: OFStream.ByteOrder = .current) throws -> UInt64 {
         let result: UInt64 = try self._readInteger()
         
         switch byteOrder {
@@ -215,7 +215,7 @@ open class Stream {
         }
     }
     
-    open func readFloat(byteOrder: Stream.ByteOrder = .current) throws -> Float {
+    open func readFloat(byteOrder: OFStream.ByteOrder = .current) throws -> Float {
         let value = try self.readInt32()
         
         if byteOrder != ByteOrder.current {
@@ -225,7 +225,7 @@ open class Stream {
         return Float(bitPattern: value)
     }
     
-    open func readDouble(byteOrder: Stream.ByteOrder = .current) throws -> Double {
+    open func readDouble(byteOrder: OFStream.ByteOrder = .current) throws -> Double {
         let value = try self.readInt64()
         
         if byteOrder != ByteOrder.current {
@@ -251,7 +251,7 @@ open class Stream {
         }
     }
     
-    open func writeInt16(_ v: UInt16, byteOrder: Stream.ByteOrder = .current) throws {
+    open func writeInt16(_ v: UInt16, byteOrder: OFStream.ByteOrder = .current) throws {
         let _v: UInt16
         
         switch byteOrder {
@@ -264,7 +264,7 @@ open class Stream {
         try self._writeInteger(_v)
     }
     
-    open func writeInt32(_ v: UInt32, byteOrder: Stream.ByteOrder = .current) throws {
+    open func writeInt32(_ v: UInt32, byteOrder: OFStream.ByteOrder = .current) throws {
         let _v: UInt32
         
         switch byteOrder {
@@ -277,7 +277,7 @@ open class Stream {
         try self._writeInteger(_v)
     }
     
-    open func writeInt64(_ v: UInt64, byteOrder: Stream.ByteOrder = .current) throws {
+    open func writeInt64(_ v: UInt64, byteOrder: OFStream.ByteOrder = .current) throws {
         let _v: UInt64
         
         switch byteOrder {
@@ -290,7 +290,7 @@ open class Stream {
         try self._writeInteger(_v)
     }
     
-    open func writeFloat(_ v: Float, byteOrder: Stream.ByteOrder = .current) throws {
+    open func writeFloat(_ v: Float, byteOrder: OFStream.ByteOrder = .current) throws {
         let _v: UInt32
         
         if byteOrder != ByteOrder.current {
@@ -302,7 +302,7 @@ open class Stream {
         try self._writeInteger(_v)
     }
     
-    open func writeDouble(_ v: Double, byteOrder: Stream.ByteOrder = .current) throws {
+    open func writeDouble(_ v: Double, byteOrder: OFStream.ByteOrder = .current) throws {
         let _v: UInt64
         
         if byteOrder != ByteOrder.current {
@@ -317,7 +317,7 @@ open class Stream {
     @inline(__always)
     internal func _readIntegers<T>(count: Int) throws -> (UnsafeMutablePointer<T>, Int) where T: FixedWidthInteger {
         guard count <= Int.max / MemoryLayout<T>.size else {
-            throw StreamsKitError.outOfRange()
+            throw OFException.outOfRange()
         }
         
         let size = count * MemoryLayout<T>.size
@@ -335,7 +335,7 @@ open class Stream {
         return (buffer.assumingMemoryBound(to: T.self), size)
     }
     
-    open func readInt16s(into buffer: inout UnsafeMutablePointer<UInt16>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
+    open func readInt16s(into buffer: inout UnsafeMutablePointer<UInt16>, count: Int, byteOrder: OFStream.ByteOrder = .current) throws -> Int {
         let (integers, size) = try self._readIntegers(count: count) as (UnsafeMutablePointer<UInt16>, Int)
         
         defer {
@@ -354,7 +354,7 @@ open class Stream {
         return size
     }
     
-    open func readInt32s(into buffer: inout UnsafeMutablePointer<UInt32>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
+    open func readInt32s(into buffer: inout UnsafeMutablePointer<UInt32>, count: Int, byteOrder: OFStream.ByteOrder = .current) throws -> Int {
         let (integers, size) = try self._readIntegers(count: count) as (UnsafeMutablePointer<UInt32>, Int)
         
         defer {
@@ -373,7 +373,7 @@ open class Stream {
         return size
     }
     
-    open func readInt64s(into buffer: inout UnsafeMutablePointer<UInt64>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
+    open func readInt64s(into buffer: inout UnsafeMutablePointer<UInt64>, count: Int, byteOrder: OFStream.ByteOrder = .current) throws -> Int {
         let (integers, size) = try self._readIntegers(count: count) as (UnsafeMutablePointer<UInt64>, Int)
         
         defer {
@@ -392,7 +392,7 @@ open class Stream {
         return size
     }
     
-    open func readFloats(into buffer: inout UnsafeMutablePointer<Float>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
+    open func readFloats(into buffer: inout UnsafeMutablePointer<Float>, count: Int, byteOrder: OFStream.ByteOrder = .current) throws -> Int {
         let (integers, size) = try self._readIntegers(count: count) as (UnsafeMutablePointer<UInt32>, Int)
         
         defer {
@@ -412,7 +412,7 @@ open class Stream {
         return size
     }
     
-    open func readDoubles(into buffer: inout UnsafeMutablePointer<Double>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
+    open func readDoubles(into buffer: inout UnsafeMutablePointer<Double>, count: Int, byteOrder: OFStream.ByteOrder = .current) throws -> Int {
         let (integers, size) = try self._readIntegers(count: count) as (UnsafeMutablePointer<UInt64>, Int)
         
         defer {
@@ -444,7 +444,7 @@ open class Stream {
     @inline(__always)
     internal func _writeIntegers<T>(_ v: UnsafePointer<T>, _ count: Int, _ swapper: (T) -> T) throws -> Int where T: FixedWidthInteger {
         guard count <= Int.max / MemoryLayout<T>.size else {
-            throw StreamsKitError.outOfRange()
+            throw OFException.outOfRange()
         }
         
         var buffer = UnsafeMutablePointer<T>.allocate(capacity: count)
@@ -460,7 +460,7 @@ open class Stream {
         return try self._writeIntegers(buffer, count)
     }
     
-    open func writeInt16s(_ v: UnsafePointer<UInt16>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
+    open func writeInt16s(_ v: UnsafePointer<UInt16>, count: Int, byteOrder: OFStream.ByteOrder = .current) throws -> Int {
         return try self._writeIntegers(v, count) {
             switch byteOrder {
             case .bigEndian:
@@ -471,7 +471,7 @@ open class Stream {
         }
     }
     
-    open func writeInt32s(_ v: UnsafePointer<UInt32>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
+    open func writeInt32s(_ v: UnsafePointer<UInt32>, count: Int, byteOrder: OFStream.ByteOrder = .current) throws -> Int {
         return try self._writeIntegers(v, count) {
             switch byteOrder {
             case .bigEndian:
@@ -482,7 +482,7 @@ open class Stream {
         }
     }
     
-    open func writeInt64s(_ v: UnsafePointer<UInt64>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
+    open func writeInt64s(_ v: UnsafePointer<UInt64>, count: Int, byteOrder: OFStream.ByteOrder = .current) throws -> Int {
         return try self._writeIntegers(v, count) {
             switch byteOrder {
             case .bigEndian:
@@ -493,9 +493,9 @@ open class Stream {
         }
     }
     
-    open func writeFloats(_ v: UnsafePointer<Float>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
+    open func writeFloats(_ v: UnsafePointer<Float>, count: Int, byteOrder: OFStream.ByteOrder = .current) throws -> Int {
         guard count <= Int.max / MemoryLayout<UInt32>.size else {
-            throw StreamsKitError.outOfRange()
+            throw OFException.outOfRange()
         }
         
         var buffer = UnsafeMutablePointer<UInt32>.allocate(capacity: count)
@@ -517,9 +517,9 @@ open class Stream {
         return try self._writeIntegers(buffer, count)
     }
     
-    open func writeDoubles(_ v: UnsafePointer<Double>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
+    open func writeDoubles(_ v: UnsafePointer<Double>, count: Int, byteOrder: OFStream.ByteOrder = .current) throws -> Int {
         guard count <= Int.max / MemoryLayout<UInt64>.size else {
-            throw StreamsKitError.outOfRange()
+            throw OFException.outOfRange()
         }
         
         var buffer = UnsafeMutablePointer<UInt64>.allocate(capacity: count)
@@ -857,11 +857,11 @@ open class Stream {
         var delimiterLength = delimiter.lengthOfBytes(using: encoding)
         
         guard delimiterLength != 0 else {
-            throw StreamsKitError.invalidArgument()
+            throw OFException.invalidArgument()
         }
         
         guard let delimiterCString = delimiter.cString(using: encoding) else {
-            throw StreamsKitError.invalidArgument()
+            throw OFException.invalidArgument()
         }
         
         var ret: String? = nil
@@ -1006,11 +1006,11 @@ open class Stream {
         let bufferLength = string.lengthOfBytes(using: encoding)
         
         guard bufferLength != 0 else {
-            throw StreamsKitError.invalidArgument()
+            throw OFException.invalidArgument()
         }
         
         guard let characters = string.cString(using: encoding) else {
-            throw StreamsKitError.invalidArgument()
+            throw OFException.invalidArgument()
         }
         
         try characters.withUnsafeBytes {

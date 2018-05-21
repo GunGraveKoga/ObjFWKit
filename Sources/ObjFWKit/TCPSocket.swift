@@ -11,7 +11,7 @@ import Foundation
 import CWin32
 #endif
 
-open class TCPSocket: StreamSocket {
+open class TCPSocket: OFStreamSocket {
     private static var _defaultSOCKS5Host: String?
     private static var _defaultSOCKS5Port: UInt16 = 1080
     
@@ -37,7 +37,7 @@ open class TCPSocket: StreamSocket {
     
     public internal(set) var listening: Bool = false
     
-    internal var _address: StreamSocket.SocketAddress!
+    internal var _address: OFStreamSocket.SocketAddress!
     
     public var SOCKS5Host: String? = TCPSocket.SOCKS5Host
     public var SOCKS5Port: UInt16 = TCPSocket.SOCKS5Port
@@ -54,7 +54,7 @@ open class TCPSocket: StreamSocket {
         var _port = port
         
         guard _socket == nil else {
-            throw StreamsKitError.alreadyConnected(stream: self)
+            throw OFException.alreadyConnected(stream: self)
         }
         
         if self.SOCKS5Host != nil {
@@ -66,7 +66,7 @@ open class TCPSocket: StreamSocket {
         
         if let results = try Resolver.resolve(host: _host, port: _port, type: .datagram) {
             for addressInfo in results {
-                if let address = StreamSocket.SocketAddress(addressInfo.address) {
+                if let address = OFStreamSocket.SocketAddress(addressInfo.address) {
                     _socket = Socket.init(family: addressInfo.family, type: addressInfo.socketType, protocol: addressInfo.protocol)
                     
                     if _socket == nil {
@@ -102,7 +102,7 @@ open class TCPSocket: StreamSocket {
         }
         
         guard _socket != nil else {
-            throw StreamsKitError.connectionFailed(host: _host, port: _port, socket: self, error: errNo)
+            throw OFException.connectionFailed(host: _host, port: _port, socket: self, error: errNo)
         }
         
         if self.SOCKS5Host != nil {
@@ -131,18 +131,18 @@ open class TCPSocket: StreamSocket {
     
     open func bindToHost(_ host: String, port: UInt16 = 0) throws -> UInt16 {
         guard _socket == nil else {
-            throw StreamsKitError.alreadyConnected(stream: self)
+            throw OFException.alreadyConnected(stream: self)
         }
         
         guard let results = try Resolver.resolve(host: host, port: port, type: .datagram) else {
-            throw StreamsKitError.bindFailed(host: host, port: port, socket: self, error: _socket_errno())
+            throw OFException.bindFailed(host: host, port: port, socket: self, error: _socket_errno())
         }
         
         if let address = SocketAddress.init(results[0].address) {
             _socket = Socket(family: results[0].family, type: results[0].socketType, protocol: results[0].protocol)
             
             guard _socket != nil else {
-                throw StreamsKitError.bindFailed(host: host, port: port, socket: self, error: _socket_errno())
+                throw OFException.bindFailed(host: host, port: port, socket: self, error: _socket_errno())
             }
             
             if SOCK_CLOEXEC == 0 {
@@ -166,20 +166,20 @@ open class TCPSocket: StreamSocket {
                 CloseSocket(_socket)
                 _socket = nil
                 
-                throw StreamsKitError.bindFailed(host: host, port: port, socket: self, error: error)
+                throw OFException.bindFailed(host: host, port: port, socket: self, error: error)
             }
             
             if port > 0 {
                 return port
             }
             
-            let boundAddress = try StreamSocket.SocketAddress {
+            let boundAddress = try OFStreamSocket.SocketAddress {
                 guard Resolver.getSockName(_socket, $0, $1) else {
                     let error = _socket_errno()
                     CloseSocket(_socket)
                     _socket = nil
                     
-                    throw StreamsKitError.bindFailed(host: host, port: port, socket: self, error: error)
+                    throw OFException.bindFailed(host: host, port: port, socket: self, error: error)
                 }
             }
             
@@ -199,20 +199,20 @@ open class TCPSocket: StreamSocket {
             CloseSocket(_socket)
             _socket = nil
             
-            throw StreamsKitError.bindFailed(host: host, port: port, socket: self, error: EAFNOSUPPORT)
+            throw OFException.bindFailed(host: host, port: port, socket: self, error: EAFNOSUPPORT)
             
         } else {
-            throw StreamsKitError.bindFailed(host: host, port: port, socket: self, error: EHOSTUNREACH)
+            throw OFException.bindFailed(host: host, port: port, socket: self, error: EHOSTUNREACH)
         }
     }
     
     open func listen(withBackLog backlog: Int = Int(SOMAXCONN)) throws {
         guard _socket != nil else {
-            throw StreamsKitError.notOpen(stream: self)
+            throw OFException.notOpen(stream: self)
         }
         
         guard ListenOnSocket(_socket, withBacklog: backlog) else {
-            throw StreamsKitError.listenFailed(socket: self, backlog: backlog, error: _socket_errno())
+            throw OFException.listenFailed(socket: self, backlog: backlog, error: _socket_errno())
         }
         
         self.listening = true
@@ -223,7 +223,7 @@ open class TCPSocket: StreamSocket {
         let (socket, address) = AcceptSocket(self._socket)
         
         guard socket != nil else {
-            throw StreamsKitError.acceptFailed(socket: self, error: _socket_errno())
+            throw OFException.acceptFailed(socket: self, error: _socket_errno())
         }
         
         let client = T()
@@ -257,7 +257,7 @@ open class TCPSocket: StreamSocket {
         }
         
         guard rc == 0 && rc == len.pointee else {
-            throw StreamsKitError.getOptionFailed(stream: self, error: _socket_errno())
+            throw OFException.getOptionFailed(stream: self, error: _socket_errno())
         }
         
         return enabled != 0
@@ -271,7 +271,7 @@ open class TCPSocket: StreamSocket {
         }
         
         guard rc == 0 else {
-            throw StreamsKitError.setOptionFailed(stream: self, error: _socket_errno())
+            throw OFException.setOptionFailed(stream: self, error: _socket_errno())
         }
     }
     
@@ -289,7 +289,7 @@ open class TCPSocket: StreamSocket {
         }
         
         guard rc == 0 && rc == len.pointee else {
-            throw StreamsKitError.getOptionFailed(stream: self, error: _socket_errno())
+            throw OFException.getOptionFailed(stream: self, error: _socket_errno())
         }
         
         return enabled != 0
@@ -303,7 +303,7 @@ open class TCPSocket: StreamSocket {
         }
         
         guard rc == 0 else {
-            throw StreamsKitError.setOptionFailed(stream: self, error: _socket_errno())
+            throw OFException.setOptionFailed(stream: self, error: _socket_errno())
         }
     }
     
@@ -315,7 +315,7 @@ open class TCPSocket: StreamSocket {
 }
 
 @inline(__always)
-fileprivate func sendOrThrow(_ self: TCPSocket, _ socket: StreamSocket.Socket, _ buffer: UnsafeMutablePointer<CChar>!, _ len: Int32) throws {
+fileprivate func sendOrThrow(_ self: TCPSocket, _ socket: OFStreamSocket.Socket, _ buffer: UnsafeMutablePointer<CChar>!, _ len: Int32) throws {
     var bytesWritten: Int
     
     #if os(Windows)
@@ -326,16 +326,16 @@ fileprivate func sendOrThrow(_ self: TCPSocket, _ socket: StreamSocket.Socket, _
     #endif
     
     guard bytesWritten >= 0 else {
-        throw StreamsKitError.writeFailed(stream: self, requestedLength: Int(len), bytesWritten: 0, error: _socket_errno())
+        throw OFException.writeFailed(stream: self, requestedLength: Int(len), bytesWritten: 0, error: _socket_errno())
     }
     
     guard bytesWritten == Int(len) else {
-        throw StreamsKitError.writeFailed(stream: self, requestedLength: Int(len), bytesWritten: bytesWritten, error: _socket_errno())
+        throw OFException.writeFailed(stream: self, requestedLength: Int(len), bytesWritten: bytesWritten, error: _socket_errno())
     }
 }
 
 @inline(__always)
-fileprivate func recvExact(_ self: TCPSocket, _ socket: StreamSocket.Socket, _ buffer: UnsafeMutablePointer<CChar>!, _ len: Int32) throws {
+fileprivate func recvExact(_ self: TCPSocket, _ socket: OFStreamSocket.Socket, _ buffer: UnsafeMutablePointer<CChar>!, _ len: Int32) throws {
     var length = Int(len)
     var _buffer = buffer
     
@@ -347,7 +347,7 @@ fileprivate func recvExact(_ self: TCPSocket, _ socket: StreamSocket.Socket, _ b
         #endif
         
         guard ret >= 0 else {
-            throw StreamsKitError.readFailed(stream: self, requestedLength: length, error: _socket_errno())
+            throw OFException.readFailed(stream: self, requestedLength: length, error: _socket_errno())
         }
         
         _buffer = _buffer!.advanced(by: ret)
@@ -358,7 +358,7 @@ fileprivate func recvExact(_ self: TCPSocket, _ socket: StreamSocket.Socket, _ b
 fileprivate extension TCPSocket {
     func _SOCKS5ConnectToHost(_ host: String, port: UInt16) throws {
         guard host.lengthOfBytes(using: .utf8) <= 256 else {
-            throw StreamsKitError.outOfRange()
+            throw OFException.outOfRange()
         }
         
         var request = UnsafeMutablePointer<CChar>.allocate(capacity: 4)
@@ -380,7 +380,7 @@ fileprivate extension TCPSocket {
         guard reply[0] == 5 && reply[1] == 0 else {
             try self.close()
             
-            throw StreamsKitError.connectionFailed(host: host, port: port, socket: self, error: EPROTONOSUPPORT)
+            throw OFException.connectionFailed(host: host, port: port, socket: self, error: EPROTONOSUPPORT)
         }
         
         do {
@@ -405,7 +405,7 @@ fileprivate extension TCPSocket {
             }
             
             guard connectionRequest.count <= INT_MAX else {
-                throw StreamsKitError.outOfRange()
+                throw OFException.outOfRange()
             }
             
             try connectionRequest.withUnsafeMutableBytes {bytes in
@@ -418,7 +418,7 @@ fileprivate extension TCPSocket {
         guard reply[0] == 5 && reply[2] == 0 else {
             try self.close()
             
-            throw StreamsKitError.connectionFailed(host: host, port: port, socket: self, error: EPROTONOSUPPORT)
+            throw OFException.connectionFailed(host: host, port: port, socket: self, error: EPROTONOSUPPORT)
         }
         
         if reply[1] != 0 {
@@ -444,7 +444,7 @@ fileprivate extension TCPSocket {
                 error = 0
             }
             
-            throw StreamsKitError.connectionFailed(host: host, port: port, socket: self, error: error)
+            throw OFException.connectionFailed(host: host, port: port, socket: self, error: error)
         }
         
         switch reply[3] {
@@ -461,7 +461,7 @@ fileprivate extension TCPSocket {
             do {
                 try self.close()
                 
-                throw StreamsKitError.connectionFailed(host: host, port: port, socket: self, error: EPROTONOSUPPORT)
+                throw OFException.connectionFailed(host: host, port: port, socket: self, error: EPROTONOSUPPORT)
             }
         }
         

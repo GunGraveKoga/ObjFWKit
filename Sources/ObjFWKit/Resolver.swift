@@ -33,16 +33,16 @@ public enum Resolver {
     public struct AddressInfo {
         private var _info: UnsafeMutablePointer<addrinfo>!
         
-        public var family: StreamSocket.SocketProtocolFamily! {
-            return StreamSocket.SocketProtocolFamily(rawValue: _info.pointee.ai_family)
+        public var family: OFStreamSocket.SocketProtocolFamily! {
+            return OFStreamSocket.SocketProtocolFamily(rawValue: _info.pointee.ai_family)
         }
         
-        public var socketType: StreamSocket.SocketType! {
-            return StreamSocket.SocketType(rawValue: _info.pointee.ai_socktype)
+        public var socketType: OFStreamSocket.SocketType! {
+            return OFStreamSocket.SocketType(rawValue: _info.pointee.ai_socktype)
         }
         
-        public var `protocol`: StreamSocket.SocketProtocol! {
-            return StreamSocket.SocketProtocol(rawValue: _info.pointee.ai_protocol)
+        public var `protocol`: OFStreamSocket.SocketProtocol! {
+            return OFStreamSocket.SocketProtocol(rawValue: _info.pointee.ai_protocol)
         }
         
         public var address: UnsafeMutablePointer<sockaddr>! {
@@ -122,7 +122,7 @@ public enum Resolver {
     
     fileprivate static let _lock = NSLock()
     
-    public static func resolve(host: String, port: UInt16, type: StreamSocket.SocketType) throws -> ResolverResults? {
+    public static func resolve(host: String, port: UInt16, type: OFStreamSocket.SocketType) throws -> ResolverResults? {
         
         var hints = addrinfo()
         hints.ai_family = AF_UNSPEC
@@ -141,7 +141,7 @@ public enum Resolver {
         }
         
         guard error == 0 else {
-            throw StreamsKitError.addressTranslationFailed(host: host, error: errno)
+            throw OFException.addressTranslationFailed(host: host, error: errno)
         }
         
         var count: Int = 0
@@ -155,7 +155,7 @@ public enum Resolver {
         
         guard count != 0 else {
             freeaddrinfo(res0)
-            throw StreamsKitError.addressTranslationFailed(host: host, error: errno)
+            throw OFException.addressTranslationFailed(host: host, error: errno)
         }
         
         
@@ -187,7 +187,7 @@ public enum Resolver {
         let tmp = Int(String(utf8String: portCString)!)!
         
         guard tmp <= UInt16.max else {
-            throw StreamsKitError.outOfRange()
+            throw OFException.outOfRange()
         }
         
         let port = UInt16(tmp)
@@ -195,7 +195,7 @@ public enum Resolver {
         return (host, port)
     }
     
-    public static func getSockName(_ socket: StreamSocket.Socket, _ addr: UnsafeMutablePointer<sockaddr>!, _ addrlen: UnsafeMutablePointer<socklen_t>!) -> Bool {
+    public static func getSockName(_ socket: OFStreamSocket.Socket, _ addr: UnsafeMutablePointer<sockaddr>!, _ addrlen: UnsafeMutablePointer<socklen_t>!) -> Bool {
         _lock.lock()
         
         defer {

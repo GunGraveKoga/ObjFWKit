@@ -8,27 +8,27 @@
 import Foundation
 
 open class UDPSocket {
-    internal var _socket: StreamSocket.Socket!
+    internal var _socket: OFStreamSocket.Socket!
     
     public required init() {
         
     }
     
-    open class func resolveAddressForHost(_ host: String, port: UInt16) throws -> StreamSocket.SocketAddress? {
+    open class func resolveAddressForHost(_ host: String, port: UInt16) throws -> OFStreamSocket.SocketAddress? {
         guard let results = try Resolver.resolve(host: host, port: port, type: .datagram) else {
             return nil
         }
         
-        return StreamSocket.SocketAddress(results[0].address)
+        return OFStreamSocket.SocketAddress(results[0].address)
     }
     
-    open class func asyncResolveAddressForHost(_ host: String, port: UInt16, _ body: @escaping (String, UInt16, StreamSocket.SocketAddress?, Error?) -> Swift.Void) {
+    open class func asyncResolveAddressForHost(_ host: String, port: UInt16, _ body: @escaping (String, UInt16, OFStreamSocket.SocketAddress?, Error?) -> Swift.Void) {
         
         let runloop = RunLoop.current
         
         Thread.asyncExecute {
             var _error: Error? = nil
-            var _address: StreamSocket.SocketAddress? = nil
+            var _address: OFStreamSocket.SocketAddress? = nil
             
             do {
                 _address = try self.resolveAddressForHost(host, port: port)
@@ -42,7 +42,7 @@ open class UDPSocket {
         }
     }
     
-    open class func getHostAndPortForAddress(address: inout StreamSocket.SocketAddress) throws -> (host: String, port: UInt16) {
+    open class func getHostAndPortForAddress(address: inout OFStreamSocket.SocketAddress) throws -> (host: String, port: UInt16) {
         return try address.withSockAddrPointer {
             return try Resolver.addressToStringAndPort($0, addressLength: $1)
         }
@@ -50,18 +50,18 @@ open class UDPSocket {
     
     open func bindToHost(_ host: String, port: UInt16) throws -> UInt16 {
         guard _socket == nil else {
-            throw StreamsKitError.alreadyConnected(stream: self)
+            throw OFException.alreadyConnected(stream: self)
         }
         
         guard let results = try Resolver.resolve(host: host, port: port, type: .datagram) else {
-            throw StreamsKitError.bindFailed(host: host, port: port, socket: self, error: _socket_errno())
+            throw OFException.bindFailed(host: host, port: port, socket: self, error: _socket_errno())
         }
         
-        if let address = StreamSocket.SocketAddress.init(results[0].address) {
-            _socket = StreamSocket.Socket(family: results[0].family, type: results[0].socketType, protocol: results[0].protocol)
+        if let address = OFStreamSocket.SocketAddress(results[0].address) {
+            _socket = OFStreamSocket.Socket(family: results[0].family, type: results[0].socketType, protocol: results[0].protocol)
             
             guard _socket != nil else {
-                throw StreamsKitError.bindFailed(host: host, port: port, socket: self, error: _socket_errno())
+                throw OFException.bindFailed(host: host, port: port, socket: self, error: _socket_errno())
             }
             
             if SOCK_CLOEXEC == 0 {
@@ -85,20 +85,20 @@ open class UDPSocket {
                 CloseSocket(_socket)
                 _socket = nil
                 
-                throw StreamsKitError.bindFailed(host: host, port: port, socket: self, error: error)
+                throw OFException.bindFailed(host: host, port: port, socket: self, error: error)
             }
             
             if port > 0 {
                 return port
             }
             
-            let boundAddress = try StreamSocket.SocketAddress {
+            let boundAddress = try OFStreamSocket.SocketAddress {
                 guard Resolver.getSockName(_socket, $0, $1) else {
                     let error = _socket_errno()
                     CloseSocket(_socket)
                     _socket = nil
                     
-                    throw StreamsKitError.bindFailed(host: host, port: port, socket: self, error: error)
+                    throw OFException.bindFailed(host: host, port: port, socket: self, error: error)
                 }
             }
             
@@ -118,21 +118,21 @@ open class UDPSocket {
             CloseSocket(_socket)
             _socket = nil
             
-            throw StreamsKitError.bindFailed(host: host, port: port, socket: self, error: EAFNOSUPPORT)
+            throw OFException.bindFailed(host: host, port: port, socket: self, error: EAFNOSUPPORT)
             
         } else {
-            throw StreamsKitError.bindFailed(host: host, port: port, socket: self, error: EHOSTUNREACH)
+            throw OFException.bindFailed(host: host, port: port, socket: self, error: EHOSTUNREACH)
         }
     }
     
-    open func receive(into buffer: inout UnsafeMutableRawPointer, length: Int, sender: inout StreamSocket.SocketAddress) throws -> Int {
+    open func receive(into buffer: inout UnsafeMutableRawPointer, length: Int, sender: inout OFStreamSocket.SocketAddress) throws -> Int {
         guard _socket != nil else {
-            throw StreamsKitError.notOpen(stream: self)
+            throw OFException.notOpen(stream: self)
         }
         
         #if os(Windows)
             guard length <= Int32.max else {
-                throw StreamsKitError.outOfRange()
+                throw OFException.outOfRange()
             }
         #endif
         
@@ -155,7 +155,7 @@ open class UDPSocket {
         }
         
         guard ret >= 0 else {
-            throw StreamsKitError.readFailed(stream: self, requestedLength: length, error: _socket_errno())
+            throw OFException.readFailed(stream: self, requestedLength: length, error: _socket_errno())
         }
         
         buffer.copyBytes(from: tmp, count: ret)
@@ -163,14 +163,14 @@ open class UDPSocket {
         return ret
     }
     
-    open func send(buffer: UnsafeRawPointer, length: Int, receiver: inout StreamSocket.SocketAddress) throws {
+    open func send(buffer: UnsafeRawPointer, length: Int, receiver: inout OFStreamSocket.SocketAddress) throws {
         guard _socket != nil else {
-            throw StreamsKitError.notOpen(stream: self)
+            throw OFException.notOpen(stream: self)
         }
         
         #if os(Windows)
             guard length <= Int32.max else {
-                throw StreamsKitError.outOfRange()
+                throw OFException.outOfRange()
             }
         #endif
         
@@ -184,13 +184,13 @@ open class UDPSocket {
         }
         
         guard bytesWritten == length else {
-            throw StreamsKitError.writeFailed(stream: self, requestedLength: length, bytesWritten: bytesWritten, error: _socket_errno())
+            throw OFException.writeFailed(stream: self, requestedLength: length, bytesWritten: bytesWritten, error: _socket_errno())
         }
     }
     
     open func close() throws {
         guard _socket != nil else {
-            throw StreamsKitError.notOpen(stream: self)
+            throw OFException.notOpen(stream: self)
         }
         
         CloseSocket(_socket)

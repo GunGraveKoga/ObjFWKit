@@ -7,7 +7,7 @@
 
 import Foundation
 
-public class StdIOStream: StreamsKit.Stream {
+public class StdIOStream: OFStream {
     internal var _fd: Int32 = -1
     internal var _atEndOFStream: Bool = false
     #if os(Windows)
@@ -72,7 +72,7 @@ public class StdIOStream: StreamsKit.Stream {
     
     public override func lowLevelIsAtEndOfStream() throws -> Bool {
         guard _fd != -1 else {
-            throw StreamsKitError.notOpen(stream: self)
+            throw OFException.notOpen(stream: self)
         }
         
         return _atEndOFStream
@@ -80,14 +80,14 @@ public class StdIOStream: StreamsKit.Stream {
     
     public override func lowLevelRead(into buffer: inout UnsafeMutableRawPointer, length: Int) throws -> Int {
         guard _fd != -1 else {
-            throw StreamsKitError.notOpen(stream: self)
+            throw OFException.notOpen(stream: self)
         }
         
         var ret: Int
         
         #if os(Windows)
             guard length <= UInt32.max else {
-                throw StreamsKitError.outOfRange
+                throw OFException.outOfRange
             }
             
             ret = MinGWCrt.read(_fd, buffer, UInt32(length))
@@ -98,7 +98,7 @@ public class StdIOStream: StreamsKit.Stream {
         #endif
         
         guard ret >= 0 else {
-            throw StreamsKitError.readFailed(stream: self, requestedLength: length, error: errno)
+            throw OFException.readFailed(stream: self, requestedLength: length, error: errno)
         }
         
         return ret
@@ -106,14 +106,14 @@ public class StdIOStream: StreamsKit.Stream {
     
     public override func lowLevelWrite(_ buffer: UnsafeRawPointer, length: Int) throws -> Int {
         guard _fd != -1 else {
-            throw StreamsKitError.notOpen(stream: self)
+            throw OFException.notOpen(stream: self)
         }
         
         var bytesWritten: Int
         
         #if os(Windows)
             guard length <= Int32.max else {
-                throw StreamsKitError.outOfRange
+                throw OFException.outOfRange
             }
             
             let _bytesWritten = MinGWCrt.write(_fd, buffer, Int32(length))
@@ -124,7 +124,7 @@ public class StdIOStream: StreamsKit.Stream {
         #endif
         
         guard bytesWritten >= 0 else {
-            throw StreamsKitError.writeFailed(stream: self, requestedLength: length, bytesWritten: 0, error: errno)
+            throw OFException.writeFailed(stream: self, requestedLength: length, bytesWritten: 0, error: errno)
         }
         
         return bytesWritten
@@ -190,7 +190,7 @@ fileprivate final class StdIOStream_Win32Console: StdIOStream {
         }
         
         guard length <= UInt32.max else {
-            throw StreamsKitError.outOfRange
+            throw OFException.outOfRange
         }
         
         var UTF16 = UnsafeMutablePointer<UTF16Char>.allocate(capacity: length)
@@ -203,7 +203,7 @@ fileprivate final class StdIOStream_Win32Console: StdIOStream {
         }
         
         guard ReadConsoleW(_handle, UTF16, DWORD(length), UnsafeMutablePointer(&UTF16Len), nil) != 0 else {
-            throw StreamsKitError.readFailed(stream: self, requestedLength: length * 2, errNo: EIO)
+            throw OFException.readFailed(stream: self, requestedLength: length * 2, errNo: EIO)
         }
         
         if UTF16Len > 0 {
@@ -236,13 +236,13 @@ fileprivate final class StdIOStream_Win32Console: StdIOStream {
         }
         
         guard rc == 1 else {
-            throw StreamsKitError.writeFailed(stream: self, requestedLength: str.count, bytesWritten: 0, errNo: EIO)
+            throw OFException.writeFailed(stream: self, requestedLength: str.count, bytesWritten: 0, errNo: EIO)
         }
         
         let bytesWritten = Int(_bytesWritten)
         
         guard bytesWritten == str.count else {
-            throw StreamsKitError.writeFailed(stream: self, requestedLength: str.count * 2, bytesWritten: bytesWritten * 2, errNo: 0)
+            throw OFException.writeFailed(stream: self, requestedLength: str.count * 2, bytesWritten: bytesWritten * 2, errNo: 0)
         }
         
         return bytesWritten * 2

@@ -7,7 +7,7 @@
 
 import Foundation
 
-open class SeekableStream: StreamsKit.Stream {
+open class OFSeekableStream: OFStream {
     #if os(Windows)
     public typealias offset_t = __int64
     #elseif os(Linux)
@@ -16,15 +16,15 @@ open class SeekableStream: StreamsKit.Stream {
     public typealias offset_t = off_t
     #endif
     
-    open func lowLevelSeek(to offset: SeekableStream.offset_t, whence: Int32) throws -> SeekableStream.offset_t {
-        throw StreamsKitError.notImplemented(method: #function, inStream: type(of: self))
+    open func lowLevelSeek(to offset: OFSeekableStream.offset_t, whence: Int32) throws -> OFSeekableStream.offset_t {
+        throw OFException.notImplemented(method: #function, inStream: type(of: self))
     }
     
-    open func seek(to offset: SeekableStream.offset_t, whence: Int32) throws -> SeekableStream.offset_t {
+    open func seek(to offset: OFSeekableStream.offset_t, whence: Int32) throws -> OFSeekableStream.offset_t {
         var _offset = offset
         
         if whence == SEEK_CUR {
-            _offset -= SeekableStream.offset_t(_readBufferLength)
+            _offset -= OFSeekableStream.offset_t(_readBufferLength)
         }
         
         _offset = try self.lowLevelSeek(to: _offset, whence: whence)

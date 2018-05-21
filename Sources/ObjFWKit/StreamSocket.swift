@@ -1,5 +1,5 @@
 //
-//  StreamSocket.swift
+//  OFStreamSocket.swift
 //  StreamsKit
 //
 //  Created by Yury Vovk on 10.05.2018.
@@ -148,7 +148,7 @@ internal var hash_seed: Int {
     }
 }
 
-public func CloseSocket(_ socket: StreamSocket.Socket) {
+public func CloseSocket(_ socket: OFStreamSocket.Socket) {
     #if os(Windows)
         closesocket(socket.rawValue)
     #else
@@ -156,36 +156,36 @@ public func CloseSocket(_ socket: StreamSocket.Socket) {
     #endif
 }
 
-public func AcceptSocket(_ socket: StreamSocket.Socket) -> (acceptedSocket: StreamSocket.Socket?, acceptedSocketAddress: StreamSocket.SocketAddress) {
-    let address = StreamSocket.SocketAddress()
+public func AcceptSocket(_ socket: OFStreamSocket.Socket) -> (acceptedSocket: OFStreamSocket.Socket?, acceptedSocketAddress: OFStreamSocket.SocketAddress) {
+    let address = OFStreamSocket.SocketAddress()
     
-    let rawSocket = address.withSockAddrPointer {(addr, len) -> StreamSocket.Socket.RawValue in
+    let rawSocket = address.withSockAddrPointer {(addr, len) -> OFStreamSocket.Socket.RawValue in
         var _len = len
         return withUnsafeMutablePointer(to: &_len) {
             return accept(socket.rawValue, addr, $0)
         }
     }
     
-    return (StreamSocket.Socket(rawValue: rawSocket), address)
+    return (OFStreamSocket.Socket(rawValue: rawSocket), address)
 }
 
-public func ListenOnSocket(_ socket: StreamSocket.Socket, withBacklog backlog: Int) -> Bool {
+public func ListenOnSocket(_ socket: OFStreamSocket.Socket, withBacklog backlog: Int) -> Bool {
     return listen(socket.rawValue, Int32(backlog)) != -1
 }
 
-public func BindSocket(_ socket: StreamSocket.Socket, onAddress address: StreamSocket.SocketAddress) -> Bool {
+public func BindSocket(_ socket: OFStreamSocket.Socket, onAddress address: OFStreamSocket.SocketAddress) -> Bool {
     return address.withSockAddrPointer {
         return bind(socket.rawValue, $0, $1) == 0
     }
 }
 
-public func ConnectSocket(_ socket: StreamSocket.Socket, toAddress address: StreamSocket.SocketAddress) -> Bool {
+public func ConnectSocket(_ socket: OFStreamSocket.Socket, toAddress address: OFStreamSocket.SocketAddress) -> Bool {
     return address.withSockAddrPointer {
         return connect(socket.rawValue, $0, $1) != -1
     }
 }
 
-open class StreamSocket: StreamsKit.Stream {
+open class OFStreamSocket: OFStream {
     
     public enum SocketProtocolFamily: RawRepresentable {
         public typealias RawValue = Int32
@@ -386,7 +386,7 @@ open class StreamSocket: StreamsKit.Stream {
             }
         }
         
-        public var family: StreamSocket.SocketProtocolFamily? {
+        public var family: OFStreamSocket.SocketProtocolFamily? {
             switch self {
             case .ipv6(_):
                 return .inet6
@@ -396,7 +396,7 @@ open class StreamSocket: StreamsKit.Stream {
                 return .unix
             case .storage(let address):
                 do {
-                    return StreamSocket.SocketProtocolFamily(rawValue: Int32(address.ss_family))
+                    return OFStreamSocket.SocketProtocolFamily(rawValue: Int32(address.ss_family))
                 }
             }
         }
@@ -508,7 +508,7 @@ open class StreamSocket: StreamsKit.Stream {
                 return nil
             }
             
-            guard let family = StreamSocket.SocketProtocolFamily(rawValue: Int32(_address.pointee.sa_family)) else {
+            guard let family = OFStreamSocket.SocketProtocolFamily(rawValue: Int32(_address.pointee.sa_family)) else {
                 return nil
             }
             
@@ -516,15 +516,15 @@ open class StreamSocket: StreamsKit.Stream {
                 switch family {
                 case .inet:
                     self = _address.withMemoryRebound(to: sockaddr_in.self, capacity: 1) {
-                        return StreamSocket.SocketAddress.ipv4($0.pointee)
+                        return OFStreamSocket.SocketAddress.ipv4($0.pointee)
                     }
                 case .inet6:
                     self = _address.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) {
-                        return StreamSocket.SocketAddress.ipv6($0.pointee)
+                        return OFStreamSocket.SocketAddress.ipv6($0.pointee)
                     }
                 case .unix:
                     self = _address.withMemoryRebound(to: sockaddr_un.self, capacity: 1) {
-                        return StreamSocket.SocketAddress.unix($0.pointee)
+                        return OFStreamSocket.SocketAddress.unix($0.pointee)
                     }
                 default:
                     return nil
@@ -533,11 +533,11 @@ open class StreamSocket: StreamsKit.Stream {
                 switch family {
                 case .inet:
                     self = _address.withMemoryRebound(to: sockaddr_in.self, capacity: 1) {
-                        return StreamSocket.SocketAddress.ipv4($0.pointee)
+                        return OFStreamSocket.SocketAddress.ipv4($0.pointee)
                     }
                 case .inet6:
                     self = _address.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) {
-                        return StreamSocket.SocketAddress.ipv6($0.pointee)
+                        return OFStreamSocket.SocketAddress.ipv6($0.pointee)
                     }
                 default:
                     return nil
@@ -553,19 +553,19 @@ open class StreamSocket: StreamsKit.Stream {
                     case .inet:
                         self = withUnsafeMutablePointer(to: &_address) {
                             return $0.withMemoryRebound(to: sockaddr_in.self, capacity: 1) {
-                                return StreamSocket.SocketAddress.ipv4($0.pointee)
+                                return OFStreamSocket.SocketAddress.ipv4($0.pointee)
                             }
                         }
                     case .inet6:
                         self = withUnsafeMutablePointer(to: &_address) {
                             return $0.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) {
-                                return StreamSocket.SocketAddress.ipv6($0.pointee)
+                                return OFStreamSocket.SocketAddress.ipv6($0.pointee)
                             }
                         }
                     case .unix:
                         self = withUnsafeMutablePointer(to: &_address) {
                             return $0.withMemoryRebound(to: sockaddr_un.self, capacity: 1) {
-                                return StreamSocket.SocketAddress.unix($0.pointee)
+                                return OFStreamSocket.SocketAddress.unix($0.pointee)
                             }
                         }
                     case .unspecified:
@@ -576,13 +576,13 @@ open class StreamSocket: StreamsKit.Stream {
                     case .inet:
                         self = withUnsafeMutablePointer(to: &_address) {
                             return $0.withMemoryRebound(to: sockaddr_in.self, capacity: 1) {
-                                return StreamSocket.SocketAddress.ipv4($0.pointee)
+                                return OFStreamSocket.SocketAddress.ipv4($0.pointee)
                             }
                         }
                     case .inet6:
                         self = withUnsafeMutablePointer(to: &_address) {
                             return $0.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) {
-                                return StreamSocket.SocketAddress.ipv6($0.pointee)
+                                return OFStreamSocket.SocketAddress.ipv6($0.pointee)
                             }
                         }
                     case .unspecified:
@@ -643,7 +643,7 @@ open class StreamSocket: StreamsKit.Stream {
             #endif
         }
         
-        public static func ==(lhs: StreamSocket.SocketAddress, rhs: StreamSocket.SocketAddress) -> Bool {
+        public static func ==(lhs: OFStreamSocket.SocketAddress, rhs: OFStreamSocket.SocketAddress) -> Bool {
             #if !os(Windows)
                 switch (lhs, rhs) {
                 case let (.ipv4(l_addr), .ipv4(r_addr)):
@@ -765,17 +765,17 @@ open class StreamSocket: StreamsKit.Stream {
             _socket = rawValue
         }
         
-        public init?(family: StreamSocket.SocketProtocolFamily, type: StreamSocket.SocketType, `protocol` _protocol: StreamSocket.SocketProtocol) {
+        public init?(family: OFStreamSocket.SocketProtocolFamily, type: OFStreamSocket.SocketType, `protocol` _protocol: OFStreamSocket.SocketProtocol) {
             self.init(rawValue: socket(family.rawValue, type.rawValue | SOCK_CLOEXEC, _protocol.rawValue))
         }
     }
     
-    internal var _socket: StreamSocket.Socket!
+    internal var _socket: OFStreamSocket.Socket!
     internal var _atEndOfStream: Bool = false
     
     open override func lowLevelIsAtEndOfStream() throws -> Bool {
         guard _socket != nil else {
-            throw StreamsKitError.notOpen(stream: self)
+            throw OFException.notOpen(stream: self)
         }
         
         return _atEndOfStream
@@ -783,14 +783,14 @@ open class StreamSocket: StreamsKit.Stream {
     
     open override func lowLevelWrite(_ buffer: UnsafeRawPointer, length: Int) throws -> Int {
         guard _socket != nil else {
-            throw StreamsKitError.notOpen(stream: self)
+            throw OFException.notOpen(stream: self)
         }
         
         var bytesWritten: Int
         
         #if os(Windows)
             guard length <= Int32.max else {
-                throw StreamsKitError.outOfRange
+                throw OFException.outOfRange
             }
             
             let _bytesWritten = send(_socket.rawValue, buffer, Int32(length), 0)
@@ -800,7 +800,7 @@ open class StreamSocket: StreamsKit.Stream {
         #endif
         
         guard bytesWritten >= 0 else {
-            throw StreamsKitError.writeFailed(stream: self, requestedLength: length, bytesWritten: 0, error: _socket_errno())
+            throw OFException.writeFailed(stream: self, requestedLength: length, bytesWritten: 0, error: _socket_errno())
         }
         
         return bytesWritten
@@ -808,14 +808,14 @@ open class StreamSocket: StreamsKit.Stream {
     
     open override func lowLevelRead(into buffer: inout UnsafeMutableRawPointer, length: Int) throws -> Int {
         guard _socket != nil else {
-            throw StreamsKitError.notOpen(stream: self)
+            throw OFException.notOpen(stream: self)
         }
         
         var ret: Int
         
         #if os(Windows)
             guard length <= UInt32.max else {
-                throw StreamsKitError.outOfRange
+                throw OFException.outOfRange
             }
             
             ret = recv(_socket.rawValue, buffer, UInt32(length), 0)
@@ -824,7 +824,7 @@ open class StreamSocket: StreamsKit.Stream {
         #endif
         
         guard ret >= 0 else {
-            throw StreamsKitError.readFailed(stream: self, requestedLength: length, error: _socket_errno())
+            throw OFException.readFailed(stream: self, requestedLength: length, error: _socket_errno())
         }
         
         if ret == 0 {
@@ -839,7 +839,7 @@ open class StreamSocket: StreamsKit.Stream {
             var v = u_long(newValue ? 1 : 0)
             
             guard ioctlsocket(_socket.rawValue, FIONBIO, UnsafeMutablePointer(&v)) != SOCKET_ERROR else {
-                throw StreamsKitError.setOptionFailed(stream: self, errNo: _socket_errno())
+                throw OFException.setOptionFailed(stream: self, errNo: _socket_errno())
             }
             
             _blocking = enable
@@ -848,7 +848,7 @@ open class StreamSocket: StreamsKit.Stream {
             var readFlags = fcntl(_socket.rawValue, F_GETFL)
             
             guard readFlags != -1 else {
-                throw StreamsKitError.setOptionFailed(stream: self, error: _socket_errno())
+                throw OFException.setOptionFailed(stream: self, error: _socket_errno())
             }
             
             if enable {
@@ -858,7 +858,7 @@ open class StreamSocket: StreamsKit.Stream {
             }
             
             guard fcntl(_socket.rawValue, F_SETFL, readFlags) != -1 else {
-                throw StreamsKitError.setOptionFailed(stream: self, error: _socket_errno())
+                throw OFException.setOptionFailed(stream: self, error: _socket_errno())
             }
         #endif
         
@@ -867,7 +867,7 @@ open class StreamSocket: StreamsKit.Stream {
     
     open override func close() throws {
         guard _socket != nil else {
-            throw StreamsKitError.notOpen(stream: self)
+            throw OFException.notOpen(stream: self)
         }
         
         CloseSocket(_socket)
