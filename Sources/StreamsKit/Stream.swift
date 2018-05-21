@@ -163,165 +163,413 @@ open class Stream {
         }
     }
     
-    open func read<T>(byteOrder: Stream.ByteOrder = .current) throws -> T where T: FixedWidthInteger {
-        func BSWAP_IF_LE(_ val: T) -> T {
-            if Stream.ByteOrder.current == .littleEndian {
-                return val.bigEndian
-            } else {
-                return val
-            }
+    @inline(__always)
+    internal func _readInteger<T>() throws -> T where T: FixedWidthInteger {
+        var buffer = UnsafeMutableRawPointer.allocate(bytes: MemoryLayout<T>.size, alignedTo: MemoryLayout<T>.alignment)
+        
+        defer {
+            buffer.deallocate(bytes: MemoryLayout<T>.size, alignedTo: MemoryLayout<T>.alignment)
         }
         
-        func BSWAP_IF_BE(_ val: T) -> T {
-            if Stream.ByteOrder.current == .bigEndian {
-                return val.littleEndian
-            } else {
-                return val
-            }
-        }
+        try self.read(into: &buffer, exactLength: MemoryLayout<T>.size)
         
-        let length = MemoryLayout<T>.size
-        var buffer = UnsafeMutableRawPointer.allocate(bytes: length, alignedTo: MemoryLayout<T>.alignment)
-        
-        try self.read(into: &buffer, exactLength: length)
-        
-        let result: T = buffer.assumingMemoryBound(to: T.self).pointee
+        return buffer.assumingMemoryBound(to: T.self).pointee
+    }
+    
+    open func readInt8() throws -> UInt8 {
+        return try self._readInteger()
+    }
+    
+    open func readInt16(byteOrder: Stream.ByteOrder = .current) throws -> UInt16 {
+        let result: UInt16 = try self._readInteger()
         
         switch byteOrder {
         case .bigEndian:
-            return BSWAP_IF_LE(result)
+            return CFSwapInt16BigToHost(result)
         case .littleEndian:
-            return BSWAP_IF_BE(result)
+            return CFSwapInt16LittleToHost(result)
         }
     }
     
-    open func read(byteOrder: Stream.ByteOrder = .current) throws -> Float {
-        let value: UInt32 = try self.read()
+    open func readInt32(byteOrder: Stream.ByteOrder = .current) throws -> UInt32 {
+        let result: UInt32 = try self._readInteger()
         
-        if ByteOrder.current != byteOrder {
+        switch byteOrder {
+        case .bigEndian:
+            return CFSwapInt32BigToHost(result)
+        case .littleEndian:
+            return CFSwapInt32LittleToHost(result)
+        }
+    }
+    
+    open func readInt64(byteOrder: Stream.ByteOrder = .current) throws -> UInt64 {
+        let result: UInt64 = try self._readInteger()
+        
+        switch byteOrder {
+        case .bigEndian:
+            return CFSwapInt64BigToHost(result)
+        case .littleEndian:
+            return CFSwapInt64LittleToHost(result)
+        }
+    }
+    
+    open func readFloat(byteOrder: Stream.ByteOrder = .current) throws -> Float {
+        let value = try self.readInt32()
+        
+        if byteOrder != ByteOrder.current {
             return CFConvertFloatSwappedToHost(CFSwappedFloat32(v: value))
-        } else {
-            return Float(bitPattern: value)
         }
-    }
-    
-    open func read(byteOrder: Stream.ByteOrder = .current) throws -> Double {
-        let value: UInt64 = try self.read()
         
-        if ByteOrder.current != byteOrder {
+        return Float(bitPattern: value)
+    }
+    
+    open func readDouble(byteOrder: Stream.ByteOrder = .current) throws -> Double {
+        let value = try self.readInt64()
+        
+        if byteOrder != ByteOrder.current {
             return CFConvertDoubleSwappedToHost(CFSwappedFloat64(v: value))
-        } else {
-            return Double(bitPattern: value)
+        }
+        
+        return Double(bitPattern: value)
+    }
+    
+    @inline(__always)
+    internal func _writeInteger<T>(_ v: T) throws where T: FixedWidthInteger {
+        var _v = v
+        
+        try withUnsafePointer(to: &_v) {
+            try self.write(buffer: $0, length: MemoryLayout<T>.size)
         }
     }
     
-    open func read<T>(into buffer: inout UnsafeMutablePointer<T>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int where T: FixedWidthInteger {
+    open func writeInt8(_ v: UInt8) throws {
+        var _v = v
+        try withUnsafePointer(to: &_v) {
+            try self.write(buffer: $0, length: MemoryLayout<UInt8>.size)
+        }
+    }
+    
+    open func writeInt16(_ v: UInt16, byteOrder: Stream.ByteOrder = .current) throws {
+        let _v: UInt16
+        
+        switch byteOrder {
+        case .bigEndian:
+            _v = CFSwapInt16HostToBig(v)
+        case .littleEndian:
+            _v = CFSwapInt16HostToLittle(v)
+        }
+        
+        try self._writeInteger(_v)
+    }
+    
+    open func writeInt32(_ v: UInt32, byteOrder: Stream.ByteOrder = .current) throws {
+        let _v: UInt32
+        
+        switch byteOrder {
+        case .bigEndian:
+            _v = CFSwapInt32HostToBig(v)
+        case .littleEndian:
+            _v = CFSwapInt32HostToLittle(v)
+        }
+        
+        try self._writeInteger(_v)
+    }
+    
+    open func writeInt64(_ v: UInt64, byteOrder: Stream.ByteOrder = .current) throws {
+        let _v: UInt64
+        
+        switch byteOrder {
+        case .bigEndian:
+            _v = CFSwapInt64HostToBig(v)
+        case .littleEndian:
+            _v = CFSwapInt64HostToLittle(v)
+        }
+        
+        try self._writeInteger(_v)
+    }
+    
+    open func writeFloat(_ v: Float, byteOrder: Stream.ByteOrder = .current) throws {
+        let _v: UInt32
+        
+        if byteOrder != ByteOrder.current {
+            _v = CFConvertFloatHostToSwapped(v).v
+        } else {
+            _v = UInt32(v)
+        }
+        
+        try self._writeInteger(_v)
+    }
+    
+    open func writeDouble(_ v: Double, byteOrder: Stream.ByteOrder = .current) throws {
+        let _v: UInt64
+        
+        if byteOrder != ByteOrder.current {
+            _v = CFConvertDoubleHostToSwapped(v).v
+        } else {
+            _v = UInt64(v)
+        }
+        
+        try self._writeInteger(_v)
+    }
+    
+    @inline(__always)
+    internal func _readIntegers<T>(count: Int) throws -> (UnsafeMutablePointer<T>, Int) where T: FixedWidthInteger {
         guard count <= Int.max / MemoryLayout<T>.size else {
             throw StreamsKitError.outOfRange()
         }
         
-        func BSWAP_IF_LE(_ val: T) -> T {
-            if Stream.ByteOrder.current == .littleEndian {
-                return val.bigEndian
-            } else {
-                return val
-            }
+        let size = count * MemoryLayout<T>.size
+        
+        var buffer = UnsafeMutableRawPointer.allocate(bytes: size, alignedTo: MemoryLayout<T>.alignment)
+        
+        do {
+            try self.read(into: &buffer, exactLength: size)
+        } catch {
+            buffer.deallocate(bytes: size, alignedTo: MemoryLayout<T>.alignment)
+            
+            throw error
         }
         
-        func BSWAP_IF_BE(_ val: T) -> T {
-            if Stream.ByteOrder.current == .bigEndian {
-                return val.littleEndian
-            } else {
-                return val
-            }
-        }
-        
-        let bufferLength = MemoryLayout<T>.size * count
-        var tmp = UnsafeMutableRawPointer.allocate(bytes: bufferLength, alignedTo: MemoryLayout<T>.alignment)
-        
-        defer {
-            tmp.deallocate(bytes: bufferLength, alignedTo: MemoryLayout<T>.alignment)
-        }
-        
-        try self.read(into: &tmp, exactLength: bufferLength)
-        
-        let destination = UnsafeMutableBufferPointer(start: buffer, count: count)
-        let source = UnsafeMutableBufferPointer(start: tmp.assumingMemoryBound(to: T.self), count: count)
-        
-        var _swap: (T) -> T
-        
-        switch byteOrder {
-        case .bigEndian:
-            _swap = BSWAP_IF_LE
-        case .littleEndian:
-            _swap = BSWAP_IF_BE
-        }
-        
-        for (i, value) in source.enumerated() {
-            destination[i] = _swap(value)
-        }
-        
-        return bufferLength
+        return (buffer.assumingMemoryBound(to: T.self), size)
     }
     
-    open func read(into buffer: inout UnsafeMutablePointer<Float>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
-        guard count <= Int.max / MemoryLayout<Float>.size else {
+    open func readInt16s(into buffer: inout UnsafeMutablePointer<UInt16>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
+        let (integers, size) = try self._readIntegers(count: count) as (UnsafeMutablePointer<UInt16>, Int)
+        
+        defer {
+            integers.deallocate(capacity: count)
+        }
+        
+        for i in 0..<count {
+            switch byteOrder {
+            case .bigEndian:
+                buffer[i] = CFSwapInt16BigToHost(integers[i])
+            case .littleEndian:
+                buffer[i] = CFSwapInt16LittleToHost(integers[i])
+            }
+        }
+        
+        return size
+    }
+    
+    open func readInt32s(into buffer: inout UnsafeMutablePointer<UInt32>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
+        let (integers, size) = try self._readIntegers(count: count) as (UnsafeMutablePointer<UInt32>, Int)
+        
+        defer {
+            integers.deallocate(capacity: count)
+        }
+        
+        for i in 0..<count {
+            switch byteOrder {
+            case .bigEndian:
+                buffer[i] = CFSwapInt32BigToHost(integers[i])
+            case .littleEndian:
+                buffer[i] = CFSwapInt32LittleToHost(integers[i])
+            }
+        }
+        
+        return size
+    }
+    
+    open func readInt64s(into buffer: inout UnsafeMutablePointer<UInt64>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
+        let (integers, size) = try self._readIntegers(count: count) as (UnsafeMutablePointer<UInt64>, Int)
+        
+        defer {
+            integers.deallocate(capacity: count)
+        }
+        
+        for i in 0..<count {
+            switch byteOrder {
+            case .bigEndian:
+                buffer[i] = CFSwapInt64BigToHost(integers[i])
+            case .littleEndian:
+                buffer[i] = CFSwapInt64LittleToHost(integers[i])
+            }
+        }
+        
+        return size
+    }
+    
+    open func readFloats(into buffer: inout UnsafeMutablePointer<Float>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
+        let (integers, size) = try self._readIntegers(count: count) as (UnsafeMutablePointer<UInt32>, Int)
+        
+        defer {
+            integers.deallocate(capacity: count)
+        }
+        
+        let shouldSwap = ByteOrder.current != byteOrder
+        
+        for i in 0..<count {
+            if shouldSwap {
+                buffer[i] = CFConvertFloatSwappedToHost(CFSwappedFloat32(v: integers[i]))
+            } else {
+                buffer[i] = Float(bitPattern: integers[i])
+            }
+        }
+        
+        return size
+    }
+    
+    open func readDoubles(into buffer: inout UnsafeMutablePointer<Double>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
+        let (integers, size) = try self._readIntegers(count: count) as (UnsafeMutablePointer<UInt64>, Int)
+        
+        defer {
+            integers.deallocate(capacity: count)
+        }
+        
+        let shouldSwap = ByteOrder.current != byteOrder
+        
+        for i in 0..<count {
+            if shouldSwap {
+                buffer[i] = CFConvertDoubleSwappedToHost(CFSwappedFloat64(v: integers[i]))
+            } else {
+                buffer[i] = Double(bitPattern: integers[i])
+            }
+        }
+        
+        return size
+    }
+    
+    @inline(__always)
+    internal func _writeIntegers<T>(_ v: UnsafePointer<T>, _ count: Int) throws -> Int where T: FixedWidthInteger {
+        let size = count * MemoryLayout<T>.size
+        
+        try self.write(buffer: v, length: size)
+        
+        return size
+    }
+    
+    @inline(__always)
+    internal func _writeIntegers<T>(_ v: UnsafePointer<T>, _ count: Int, _ swapper: (T) -> T) throws -> Int where T: FixedWidthInteger {
+        guard count <= Int.max / MemoryLayout<T>.size else {
             throw StreamsKitError.outOfRange()
         }
         
-        let bufferLength = MemoryLayout<UInt32>.size * count
-        var tmp = UnsafeMutableRawPointer.allocate(bytes: bufferLength, alignedTo: MemoryLayout<UInt32>.alignment)
+        var buffer = UnsafeMutablePointer<T>.allocate(capacity: count)
         
         defer {
-            tmp.deallocate(bytes: bufferLength, alignedTo: MemoryLayout<UInt32>.alignment)
+            buffer.deallocate(capacity: count)
         }
         
-        try self.read(into: &tmp, exactLength: bufferLength)
-        
-        let destination = UnsafeMutableBufferPointer(start: buffer, count: count)
-        let source = UnsafeMutableBufferPointer(start: tmp.assumingMemoryBound(to: UInt32.self), count: count)
-        
-        for (i, item) in source.enumerated() {
-            if ByteOrder.current != byteOrder {
-                destination[i] = CFConvertFloatSwappedToHost(CFSwappedFloat32(v: item))
-            } else {
-                destination[i] = Float(bitPattern: item)
-            }
+        for i in 0..<count {
+            buffer[i] = swapper(v[i])
         }
         
-        return bufferLength
+        return try self._writeIntegers(buffer, count)
     }
     
-    open func read(into buffer: inout UnsafeMutablePointer<Double>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
-        guard count <= Int.max / MemoryLayout<Double>.size else {
+    open func writeInt16s(_ v: UnsafePointer<UInt16>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
+        return try self._writeIntegers(v, count) {
+            switch byteOrder {
+            case .bigEndian:
+                return CFSwapInt16HostToBig($0)
+            case .littleEndian:
+                return CFSwapInt16HostToLittle($0)
+            }
+        }
+    }
+    
+    open func writeInt32s(_ v: UnsafePointer<UInt32>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
+        return try self._writeIntegers(v, count) {
+            switch byteOrder {
+            case .bigEndian:
+                return CFSwapInt32HostToBig($0)
+            case .littleEndian:
+                return CFSwapInt32HostToLittle($0)
+            }
+        }
+    }
+    
+    open func writeInt64s(_ v: UnsafePointer<UInt64>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
+        return try self._writeIntegers(v, count) {
+            switch byteOrder {
+            case .bigEndian:
+                return CFSwapInt64HostToBig($0)
+            case .littleEndian:
+                return CFSwapInt64HostToLittle($0)
+            }
+        }
+    }
+    
+    open func writeFloats(_ v: UnsafePointer<Float>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
+        guard count <= Int.max / MemoryLayout<UInt32>.size else {
             throw StreamsKitError.outOfRange()
         }
         
-        let bufferLength = MemoryLayout<UInt64>.size * count
-        var tmp = UnsafeMutableRawPointer.allocate(bytes: bufferLength, alignedTo: MemoryLayout<UInt64>.alignment)
+        var buffer = UnsafeMutablePointer<UInt32>.allocate(capacity: count)
         
         defer {
-            tmp.deallocate(bytes: bufferLength, alignedTo: MemoryLayout<UInt64>.alignment)
+            buffer.deallocate(capacity: count)
         }
         
-        try self.read(into: &tmp, exactLength: bufferLength)
+        let shouldSwap = ByteOrder.current != byteOrder
         
-        let destination = UnsafeMutableBufferPointer(start: buffer, count: count)
-        let source = UnsafeMutableBufferPointer(start: tmp.assumingMemoryBound(to: UInt64.self), count: count)
-        
-        for (i, item) in source.enumerated() {
-            if ByteOrder.current != byteOrder {
-                destination[i] = CFConvertDoubleSwappedToHost(CFSwappedFloat64(v: item))
+        for i in 0..<count {
+            if shouldSwap {
+                buffer[i] = CFConvertFloatHostToSwapped(v[i]).v
             } else {
-                destination[i] = Double(bitPattern: item)
+                buffer[i] = UInt32(v[i])
             }
         }
         
-        return bufferLength
+        return try self._writeIntegers(buffer, count)
     }
     
-    open func readData(withCount count: Int) throws -> Data {
+    open func writeDoubles(_ v: UnsafePointer<Double>, count: Int, byteOrder: Stream.ByteOrder = .current) throws -> Int {
+        guard count <= Int.max / MemoryLayout<UInt64>.size else {
+            throw StreamsKitError.outOfRange()
+        }
         
+        var buffer = UnsafeMutablePointer<UInt64>.allocate(capacity: count)
+        
+        defer {
+            buffer.deallocate(capacity: count)
+        }
+        
+        let shouldSwap = ByteOrder.current != byteOrder
+        
+        for i in 0..<count {
+            if shouldSwap {
+                buffer[i] = CFConvertDoubleHostToSwapped(v[i]).v
+            } else {
+                buffer[i] = UInt64(v[i])
+            }
+        }
+        
+        return try self._writeIntegers(buffer, count)
+    }
+    
+    open func readData(bytesCount count: Int) throws -> Data {
+        var buffer = UnsafeMutableRawPointer.allocate(bytes: count, alignedTo: MemoryLayout<UInt8>.alignment)
+        
+        do {
+            try self.read(into: &buffer, exactLength: count)
+        } catch {
+            buffer.deallocate(bytes: count, alignedTo: MemoryLayout<UInt8>.alignment)
+            
+            throw error
+        }
+        
+        return Data.init(bytesNoCopy: buffer, count: count, deallocator: .custom({$0.deallocate(bytes: $1, alignedTo: MemoryLayout<UInt8>.alignment)}))
+    }
+    
+    open func readDataUntilEndOfStream() throws -> Data {
+        var data = Data()
+        let pageSyze = NSPageSize()
+        
+        var buffer = UnsafeMutableRawPointer.allocate(bytes: pageSyze, alignedTo: MemoryLayout<UInt8>.alignment)
+        
+        defer {
+            buffer.deallocate(bytes: pageSyze, alignedTo: MemoryLayout<UInt8>.alignment)
+        }
+        
+        while try !self.atEndOfStream() {
+            let length = try self.read(into: &buffer, length: pageSyze)
+            
+            data.append(buffer.assumingMemoryBound(to: UInt8.self), count: length)
+        }
+        
+        return data
     }
     
     open func flushWriteBuffer() throws {
