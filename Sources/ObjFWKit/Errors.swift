@@ -54,7 +54,7 @@ public enum OFException {
         return NSError(domain: OFExceptionDomain, code: 0, userInfo: _userInfo)
     }
     
-    public static func notOpen<T>(stream: T, userInfo info: [String: Any]? = nil) -> NSError where T: StreamsKit.UDPSocket {
+    public static func notOpen<T>(stream: T, userInfo info: [String: Any]? = nil) -> NSError where T: OFUDPSocket {
         var _userInfo = [String: Any]()
         
         if let info = info {
@@ -67,7 +67,7 @@ public enum OFException {
         return NSError(domain: OFExceptionDomain, code: 0, userInfo: _userInfo)
     }
     
-    public static func alreadyConnected<T>(stream: T, userInfo info: [String: Any]? = nil) -> NSError where T: StreamsKit.TCPSocket {
+    public static func alreadyConnected<T>(stream: T, userInfo info: [String: Any]? = nil) -> NSError where T: OFTCPSocket {
         var _userInfo = [String: Any]()
         
         if let info = info {
@@ -80,7 +80,7 @@ public enum OFException {
         return NSError(domain: OFExceptionDomain, code: 0, userInfo: _userInfo)
     }
     
-    public static func alreadyConnected<T>(stream: T, userInfo info: [String: Any]? = nil) -> NSError where T: StreamsKit.UDPSocket {
+    public static func alreadyConnected<T>(stream: T, userInfo info: [String: Any]? = nil) -> NSError where T: OFUDPSocket {
         var _userInfo = [String: Any]()
         
         if let info = info {
@@ -93,7 +93,7 @@ public enum OFException {
         return NSError(domain: OFExceptionDomain, code: 0, userInfo: _userInfo)
     }
     
-    public static func bindFailed<T>(host: String, port: UInt16, socket: T, error: Int32) -> NSError where T: StreamsKit.TCPSocket {
+    public static func bindFailed<T>(host: String, port: UInt16, socket: T, error: Int32) -> NSError where T: OFTCPSocket {
         return OFPOSIXError(error, userInfo: [
             StreamKey: socket,
             HostKey: host,
@@ -101,7 +101,7 @@ public enum OFException {
             ])
     }
     
-    public static func bindFailed<T>(host: String, port: UInt16, socket: T, error: Int32) -> NSError where T: StreamsKit.UDPSocket {
+    public static func bindFailed<T>(host: String, port: UInt16, socket: T, error: Int32) -> NSError where T: OFUDPSocket {
         return OFPOSIXError(error, userInfo: [
             StreamKey: socket,
             HostKey: host,
@@ -109,14 +109,14 @@ public enum OFException {
             ])
     }
     
-    public static func listenFailed<T>(socket: T, backlog: Int, error: Int32) -> NSError where T: StreamsKit.TCPSocket {
+    public static func listenFailed<T>(socket: T, backlog: Int, error: Int32) -> NSError where T: OFTCPSocket {
         return OFPOSIXError(error, userInfo: [
             StreamKey: socket,
             BacklogKey: backlog
             ])
     }
     
-    public static func connectionFailed<T>(host: String, port: UInt16, socket: T, error: Int32) -> NSError where T: StreamsKit.TCPSocket {
+    public static func connectionFailed<T>(host: String, port: UInt16, socket: T, error: Int32) -> NSError where T: OFTCPSocket {
         return OFPOSIXError(error, userInfo: [
             StreamKey: socket,
             HostKey: host,
@@ -132,7 +132,7 @@ public enum OFException {
             ])
     }
     
-    public static func writeFailed<T>(stream: T, requestedLength: Int, bytesWritten: Int, error: Int32) -> NSError where T: StreamsKit.UDPSocket {
+    public static func writeFailed<T>(stream: T, requestedLength: Int, bytesWritten: Int, error: Int32) -> NSError where T: OFUDPSocket {
         return OFPOSIXError(error, userInfo: [
             StreamKey: stream,
             RequestedLengthKey: requestedLength,
@@ -147,7 +147,7 @@ public enum OFException {
             ])
     }
     
-    public static func readFailed<T>(stream: T, requestedLength: Int, error: Int32) -> NSError where T: StreamsKit.UDPSocket {
+    public static func readFailed<T>(stream: T, requestedLength: Int, error: Int32) -> NSError where T: OFUDPSocket {
         return OFPOSIXError(error, userInfo: [
             StreamKey: stream,
             RequestedLengthKey: requestedLength
@@ -174,7 +174,7 @@ public enum OFException {
         return OFPOSIXError(errno, userInfo: [HostKey: host])
     }
     
-    public static func acceptFailed<T>(socket: T, error: Int32) -> NSError where T: StreamsKit.TCPSocket {
+    public static func acceptFailed<T>(socket: T, error: Int32) -> NSError where T: OFTCPSocket {
         return OFPOSIXError(error, userInfo: [StreamKey: socket])
     }
     

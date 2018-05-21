@@ -81,7 +81,7 @@ public enum Resolver {
             _results = __ResolverResultStorage(results)
         }
         
-        public func makeIterator() -> AnyIterator<StreamsKit.Resolver.AddressInfo> {
+        public func makeIterator() -> AnyIterator<Resolver.AddressInfo> {
             var _info = _results._addrinfo
             
             return AnyIterator {
@@ -107,7 +107,7 @@ public enum Resolver {
             return result
         }
         
-        public subscript(index: Int) -> StreamsKit.Resolver.AddressInfo {
+        public subscript(index: Int) -> Resolver.AddressInfo {
             precondition(self.count != 0 && index < self.count, "Index \(index) out of range!")
             
             for (i, info) in self.enumerated() {

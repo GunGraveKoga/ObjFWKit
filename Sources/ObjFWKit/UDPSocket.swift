@@ -1,5 +1,5 @@
 //
-//  UDPSocket.swift
+//  OFUDPSocket.swift
 //  StreamsKit
 //
 //  Created by Yury Vovk on 17.05.2018.
@@ -7,7 +7,7 @@
 
 import Foundation
 
-open class UDPSocket {
+open class OFUDPSocket {
     internal var _socket: OFStreamSocket.Socket!
     
     public required init() {

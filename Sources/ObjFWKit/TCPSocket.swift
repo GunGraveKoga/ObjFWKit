@@ -1,5 +1,5 @@
 //
-//  TCPSocket.swift
+//  OFTCPSocket.swift
 //  StreamsKit
 //
 //  Created by Yury Vovk on 10.05.2018.
@@ -11,7 +11,7 @@ import Foundation
 import CWin32
 #endif
 
-open class TCPSocket: OFStreamSocket {
+open class OFTCPSocket: OFStreamSocket {
     private static var _defaultSOCKS5Host: String?
     private static var _defaultSOCKS5Port: UInt16 = 1080
     
@@ -39,8 +39,8 @@ open class TCPSocket: OFStreamSocket {
     
     internal var _address: OFStreamSocket.SocketAddress!
     
-    public var SOCKS5Host: String? = TCPSocket.SOCKS5Host
-    public var SOCKS5Port: UInt16 = TCPSocket.SOCKS5Port
+    public var SOCKS5Host: String? = OFTCPSocket.SOCKS5Host
+    public var SOCKS5Port: UInt16 = OFTCPSocket.SOCKS5Port
     
     public required override init() {
         
@@ -111,7 +111,7 @@ open class TCPSocket: OFStreamSocket {
         
     }
     
-    open func asyncConnectToHost(_ host: String, port: UInt16, body: @escaping (TCPSocket, Error?) -> Void) {
+    open func asyncConnectToHost(_ host: String, port: UInt16, body: @escaping (OFTCPSocket, Error?) -> Void) {
         
         let runloop = RunLoop.current
         
@@ -138,7 +138,7 @@ open class TCPSocket: OFStreamSocket {
             throw OFException.bindFailed(host: host, port: port, socket: self, error: _socket_errno())
         }
         
-        if let address = SocketAddress.init(results[0].address) {
+        if let address = SocketAddress(results[0].address) {
             _socket = Socket(family: results[0].family, type: results[0].socketType, protocol: results[0].protocol)
             
             guard _socket != nil else {
@@ -218,7 +218,7 @@ open class TCPSocket: OFStreamSocket {
         self.listening = true
     }
     
-    open func accept<T>() throws -> T where T: StreamsKit.TCPSocket {
+    open func accept<T>() throws -> T where T: OFTCPSocket {
         
         let (socket, address) = AcceptSocket(self._socket)
         
@@ -315,7 +315,7 @@ open class TCPSocket: OFStreamSocket {
 }
 
 @inline(__always)
-fileprivate func sendOrThrow(_ self: TCPSocket, _ socket: OFStreamSocket.Socket, _ buffer: UnsafeMutablePointer<CChar>!, _ len: Int32) throws {
+fileprivate func sendOrThrow(_ self: OFTCPSocket, _ socket: OFStreamSocket.Socket, _ buffer: UnsafeMutablePointer<CChar>!, _ len: Int32) throws {
     var bytesWritten: Int
     
     #if os(Windows)
@@ -335,7 +335,7 @@ fileprivate func sendOrThrow(_ self: TCPSocket, _ socket: OFStreamSocket.Socket,
 }
 
 @inline(__always)
-fileprivate func recvExact(_ self: TCPSocket, _ socket: OFStreamSocket.Socket, _ buffer: UnsafeMutablePointer<CChar>!, _ len: Int32) throws {
+fileprivate func recvExact(_ self: OFTCPSocket, _ socket: OFStreamSocket.Socket, _ buffer: UnsafeMutablePointer<CChar>!, _ len: Int32) throws {
     var length = Int(len)
     var _buffer = buffer
     
@@ -355,7 +355,7 @@ fileprivate func recvExact(_ self: TCPSocket, _ socket: OFStreamSocket.Socket, _
     }
 }
 
-fileprivate extension TCPSocket {
+fileprivate extension OFTCPSocket {
     func _SOCKS5ConnectToHost(_ host: String, port: UInt16) throws {
         guard host.lengthOfBytes(using: .utf8) <= 256 else {
             throw OFException.outOfRange()
