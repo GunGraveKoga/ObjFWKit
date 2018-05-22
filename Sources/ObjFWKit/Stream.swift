@@ -53,6 +53,7 @@ open class OFStream {
     
     open var writeBuffered: Bool = false
     internal var _blocking: Bool = true
+    internal var _observer: OFStreamObserver!
     
     open var isBlocking: Bool {
         get {
@@ -113,6 +114,8 @@ open class OFStream {
                     
                 } else {
                     buffer.copyBytes(from: tmp, count: bytesRead)
+                    
+                    return bytesRead
                 }
             }
             
@@ -138,6 +141,15 @@ open class OFStream {
         }
     }
     
+    open func asyncRead(into buffer: inout UnsafeMutableRawPointer, length: Int, _ body: @escaping (OFStream, UnsafeMutableRawPointer, Int, Error?) -> Bool) {
+        
+        if self._observer != nil {
+            self._observer.addReadItem(ReadQueueItem(buffer, length, body))
+            
+            self._observer.startObserving()
+        }
+    }
+    
     open func read(into buffer: inout UnsafeMutableRawPointer, exactLength length: Int) throws {
         var readLength = Int(0)
         
@@ -151,17 +163,41 @@ open class OFStream {
         }
     }
     
-    open func write(buffer: UnsafeRawPointer, length: Int) throws {
+    open func asyncRead(into buffer: inout UnsafeMutableRawPointer, exactLength length: Int, _ body: @escaping (OFStream, UnsafeMutableRawPointer, Int, Error?) -> Bool) {
+        
+        if self._observer != nil {
+            self._observer.addReadItem(ExactReadQueueItem(buffer, length, body))
+            
+            self._observer.startObserving()
+        }
+    }
+    
+    @discardableResult
+    open func write(buffer: UnsafeRawPointer, length: Int) throws -> Int {
         if !writeBuffered {
             let bytesWritten = try self.lowLevelWrite(buffer, length: length)
             
             if _blocking && bytesWritten < length {
                 throw OFException.writeFailed(stream: self, requestedLength: length, bytesWritten: bytesWritten, error: 0)
             }
+            
+            return bytesWritten
+            
         } else {
             _writeBuffer = self._resizeIntenalBuffer(_writeBuffer, size: _writeBufferLength + length)
             _writeBuffer.baseAddress!.advanced(by: _writeBufferLength).copyBytes(from: buffer, count: length)
             _writeBufferLength += length
+            
+            return length
+        }
+    }
+    
+    open func asyncWrite(buffer: UnsafeRawPointer, length: Int, _ body: @escaping (OFStream, UnsafeMutablePointer<UnsafeRawPointer>, Int, Error?) -> Int) {
+        
+        if self._observer != nil {
+            self._observer.addWriteItem(WriteQueueItem(buffer, length, body))
+            
+            self._observer.startObserving()
         }
     }
     
@@ -239,14 +275,14 @@ open class OFStream {
     internal func _writeInteger<T>(_ v: T) throws where T: FixedWidthInteger {
         var _v = v
         
-        try withUnsafePointer(to: &_v) {
+        _ = try withUnsafePointer(to: &_v) {
             try self.write(buffer: $0, length: MemoryLayout<T>.size)
         }
     }
     
     open func writeInt8(_ v: UInt8) throws {
         var _v = v
-        try withUnsafePointer(to: &_v) {
+        _ = try withUnsafePointer(to: &_v) {
             try self.write(buffer: $0, length: MemoryLayout<UInt8>.size)
         }
     }
@@ -656,9 +692,11 @@ open class OFStream {
                         ret?.append(readBuffer, count: i + 1 - delimiter.count)
                     }
                     
-                    _readBufferMemmory.deallocate()
-                    _readBuffer = nil
-                    _readBufferLength = 0
+                    if _readBuffer != nil {
+                        _readBufferMemmory.deallocate()
+                        _readBuffer = nil
+                        _readBufferLength = 0
+                    }
                     
                     _readBufferMemmory = UnsafeMutableRawBufferPointer.allocate(count: bufferLength - i - 1)
                     _readBuffer = _readBufferMemmory.baseAddress
@@ -702,7 +740,7 @@ open class OFStream {
     
     @discardableResult
     open func writeData(_ data: Data) throws -> Int {
-        try data.withUnsafeBytes {(buffer: UnsafePointer<UInt8>) in
+        _ = try data.withUnsafeBytes {(buffer: UnsafePointer<UInt8>) in
             try self.write(buffer: buffer, length: data.count)
         }
         
@@ -811,9 +849,11 @@ open class OFStream {
                         return nil
                     }
                     
-                    _readBufferMemmory.deallocate()
-                    _readBuffer = nil
-                    _readBufferLength = 0
+                    if _readBuffer != nil {
+                        _readBufferMemmory.deallocate()
+                        _readBuffer = nil
+                        _readBufferLength = 0
+                    }
                     
                     _readBufferMemmory = UnsafeMutableRawBufferPointer.allocate(count: bufferLength - i - 1)
                     _readBuffer = _readBufferMemmory.baseAddress
@@ -851,6 +891,15 @@ open class OFStream {
         }
         
         return line
+    }
+    
+    open func asyncReadLine(withEncoding encoding: String.Encoding = .utf8, _ body: @escaping (OFStream, String?, Error?) -> Bool) {
+        
+        if self._observer != nil {
+            self._observer.addReadItem(ReadLineQueueItem(encoding, body))
+            
+            self._observer.startObserving()
+        }
     }
     
     open func tryReadString(tillDelimiter delimiter: String, encoding: String.Encoding = .utf8) throws -> String? {
@@ -960,9 +1009,11 @@ open class OFStream {
                     return nil
                 }
                 
-                _readBufferMemmory.deallocate()
-                _readBuffer = nil
-                _readBufferLength = 0
+                if _readBuffer != nil {
+                    _readBufferMemmory.deallocate()
+                    _readBuffer = nil
+                    _readBufferLength = 0
+                }
                 
                 _readBufferMemmory = UnsafeMutableRawBufferPointer.allocate(count: bufferLength - i - 1)
                 _readBuffer = _readBufferMemmory.baseAddress
@@ -1013,7 +1064,7 @@ open class OFStream {
             throw OFException.invalidArgument()
         }
         
-        try characters.withUnsafeBytes {
+        _ = try characters.withUnsafeBytes {
             try self.write(buffer: $0.baseAddress!, length: bufferLength)
         }
         
@@ -1030,7 +1081,7 @@ open class OFStream {
         let res = String(format: format, arguments: args)
         let length = res.lengthOfBytes(using: .utf8)
         
-        try res.withCString {
+        _ = try res.withCString {
             try self.write(buffer: $0, length: length)
         }
         
@@ -1062,5 +1113,17 @@ open class OFStream {
         _readBufferLength = 0
         _writeBufferLength = 0
         self.writeBuffered = false
+    }
+    
+    open func cancelAsyncRequests() {
+        if self._observer != nil {
+            self._observer.cancelObserving()
+        }
+    }
+}
+
+internal extension OFStream {
+    internal func of_waitForDelimiter() -> Bool {
+        return _waitingForDelimiter
     }
 }

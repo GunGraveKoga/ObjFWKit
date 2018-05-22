@@ -731,11 +731,7 @@ open class OFStreamSocket: OFStream {
     
     public struct Socket: RawRepresentable {
         
-        #if os(Windows)
-        public typealias RawValue = SOCKET
-        #else
-        public typealias RawValue = Int32
-        #endif
+        public typealias RawValue = CFSocketNativeHandle
         
         private var _socket: Socket.RawValue
         
@@ -751,6 +747,12 @@ open class OFStreamSocket: OFStream {
             return true
         }
         
+        #if os(Windows)
+        public static var INVALID_SOCKET: Socket.RawValue = Socket.RawValue(bitPattern: Int(-1))
+        #else
+        public static var INVALID_SOCKET: Socket.RawValue = Socket.RawValue(-1)
+        #endif
+        
         private static var _initialized = Socket._initializeSockets()
         
         public var rawValue: Socket.RawValue {
@@ -758,7 +760,7 @@ open class OFStreamSocket: OFStream {
         }
         
         public init?(rawValue: Socket.RawValue) {
-            guard Socket._initialized, rawValue != Socket.RawValue(-1) else {
+            guard Socket._initialized, rawValue != Socket.INVALID_SOCKET else {
                 return nil
             }
             

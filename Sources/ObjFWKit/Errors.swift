@@ -25,10 +25,11 @@ fileprivate func OFPOSIXError(_ errorCode: POSIXErrorCode, userInfo info: [Strin
 }
 
 fileprivate func OFPOSIXError(_ errorCode: Int32, userInfo info: [String: Any]? = nil) -> NSError {
-    if errorCode == 0 {
-        return NSError(domain: OFExceptionDomain, code: 0, userInfo: info)
+    if let _POSIXError = POSIXErrorCode(rawValue: errorCode) {
+        return OFPOSIXError(_POSIXError, userInfo: info)
     }
-    return OFPOSIXError(POSIXErrorCode(rawValue: errorCode)!, userInfo: info)
+    
+    return NSError(domain: NSPOSIXErrorDomain, code: Int(errorCode), userInfo: info)
 }
 
 
