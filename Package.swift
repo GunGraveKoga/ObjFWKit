@@ -9,6 +9,11 @@ let package = Package(
         // Products define the executables and libraries produced by a package, and make them visible to other packages.
         .library(
             name: "ObjFWKit",
+            type: .dynamic,
+            targets: ["ObjFWKit"]),
+        .library(
+            name: "ObjFWKit_static",
+            type: .static,
             targets: ["ObjFWKit"]),
     ],
     dependencies: [

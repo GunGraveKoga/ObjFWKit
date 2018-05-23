@@ -176,6 +176,76 @@ internal struct WriteQueueItem: QueueItem {
     }
 }
 
+internal struct UDPReceiveQueueItem: QueueItem {
+    private var _block: (OFUDPSocket, UnsafeMutableRawPointer, Int, OFStreamSocket.SocketAddress?, Error?) -> Bool
+    private var _buffer: UnsafeMutableRawPointer
+    private var _length: Int
+    
+    init(_ buffer: UnsafeMutableRawPointer, _ length: Int, _ block: @escaping (OFUDPSocket, UnsafeMutableRawPointer, Int, OFStreamSocket.SocketAddress?, Error?) -> Bool) {
+        self._buffer = buffer
+        self._length = length
+        self._block = block
+    }
+    
+    mutating func handleObject(_ object: AnyObject?) -> Bool {
+        let stream = object as! OFUDPSocket
+        
+        var length = Int(0)
+        var receiver: OFStreamSocket.SocketAddress? = nil
+        var exception: Error? = nil
+        
+        do {
+            let (length_, receiver_) = try stream.receive(into: &_buffer, length: _length)
+            length = length_
+            receiver = receiver_
+        } catch {
+            exception = error
+        }
+        
+        return _block(stream, _buffer, length, receiver, exception)
+    }
+}
+
+internal struct UDPSendQueueItem: QueueItem {
+    private var _block: (OFUDPSocket, UnsafeMutablePointer<UnsafeRawPointer>, Int, OFStreamSocket.SocketAddress, Error?) -> Int
+    private var _buffer: UnsafeRawPointer
+    private var _length: Int
+    private var _receiver: OFStreamSocket.SocketAddress
+    
+    init(_ buffer: UnsafeRawPointer, _ length: Int, _ receiver: OFStreamSocket.SocketAddress, _ block: @escaping (OFUDPSocket, UnsafeMutablePointer<UnsafeRawPointer>, Int, OFStreamSocket.SocketAddress, Error?) -> Int) {
+        self._block = block
+        self._buffer = buffer
+        self._length = length
+        self._receiver = receiver
+    }
+    
+    mutating func handleObject(_ object: AnyObject?) -> Bool {
+        let stream = object as! OFUDPSocket
+        
+        var exception: Error? = nil
+        
+        do {
+            try stream.send(buffer: _buffer, length: _length, receiver: _receiver)
+        } catch {
+            exception = error
+        }
+        
+        var buffer = _buffer
+        
+        return withUnsafeMutablePointer(to: &buffer) {
+            _length = _block(stream, $0, (exception == nil) ? _length : 0, _receiver, exception)
+            
+            if _length == 0 {
+                return false
+            }
+            
+            _buffer = $0.pointee
+            
+            return true
+        }
+    }
+}
+
 open class OFStreamObserver {
     internal weak var stream: AnyObject?
     internal var readQueue = [QueueItem]()
