@@ -188,6 +188,30 @@ public enum OFException {
     }
     
     public static func invalidEncoding(_ encoding: String.Encoding) -> NSError {
-        return NSError(domain: OFExceptionDomain, code:NSURLErrorCannotDecodeContentData, userInfo: [NSStringEncodingErrorKey: NSNumber(value: encoding.rawValue)] )
+        return NSError(domain: OFExceptionDomain, code: NSURLErrorCannotDecodeContentData, userInfo: [NSStringEncodingErrorKey: NSNumber(value: encoding.rawValue)] )
+    }
+    
+    public static func invalidEncoding() -> NSError {
+        return NSError(domain: OFExceptionDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid encoding"])
+    }
+    
+    public static func unsupportedProtocol(_ URL: URL) -> NSError {
+        return NSError(domain: NSURLErrorDomain, code: URLError.badURL.rawValue, userInfo: nil)
+    }
+    
+    public static func invalidServerReply() -> NSError {
+        return NSError(domain: NSURLErrorDomain, code: URLError.badServerResponse.rawValue, userInfo: nil)
+    }
+    
+    public static func unsupportedVersion(_ version: String) -> NSError {
+        return NSError(domain: NSURLErrorDomain, code: URLError.badServerResponse.rawValue, userInfo: nil)
+    }
+    
+    public static func badURL(_ URL: URL) -> NSError {
+        return NSError(domain: NSURLErrorDomain, code: URLError.badURL.rawValue, userInfo: nil)
+    }
+    
+    public static func requestFailed(_ request: OFHTTPRequest, response: OFHTTPResponse) -> NSError {
+        return NSError(domain: NSURLErrorDomain, code: URLError.badServerResponse)
     }
 }

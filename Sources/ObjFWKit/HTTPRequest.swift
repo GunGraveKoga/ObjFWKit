@@ -65,6 +65,8 @@ public enum OFHTTPRequestMethod: RawRepresentable {
 }
 
 public struct OFHTTPRequestProtocolVersion: CustomStringConvertible, Equatable {
+    public typealias StringLiteralType = String
+    
     public static func ==(lhs: OFHTTPRequestProtocolVersion, rhs: OFHTTPRequestProtocolVersion) -> Bool {
         return lhs.minor == rhs.major && lhs.minor == rhs.minor
     }
@@ -116,6 +118,14 @@ open class OFHTTPRequest: Equatable {
         self.URL = URL
         self.protocolVersion = OFHTTPRequestProtocolVersion(major: 1, minor: 1)
         self.method = .GET
+    }
+    
+    public init(_ other: OFHTTPRequest) {
+        self.URL = other.URL
+        self.protocolVersion = other.protocolVersion
+        self.method = other.method
+        self.remoteAddress = other.remoteAddress
+        self.headers = other.headers
     }
     
     public static func ==(lhs: OFHTTPRequest, rhs: OFHTTPRequest) -> Bool {

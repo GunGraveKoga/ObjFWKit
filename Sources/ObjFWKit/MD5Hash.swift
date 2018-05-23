@@ -24,11 +24,11 @@ public struct MD5Hash: OFCryptoHash {
     public var digest: UnsafePointer<CChar>!
     
     public func update(withBuffer buffer: UnsafeMutableRawPointer, length: Int) {
-        <#code#>
+        
     }
     
     public func reset() {
-        <#code#>
+        
     }
     
     

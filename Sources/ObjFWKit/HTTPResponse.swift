@@ -7,6 +7,61 @@
 
 import Foundation
 
+public extension String {
+    public static func parseEncoding(_ encodingName: String) throws -> String.Encoding {
+        switch encodingName.lowercased() {
+        case "utf8",
+             "utf-8":
+            return String.Encoding.utf8
+        case "ascii",
+             "us-ascii":
+            return String.Encoding.ascii
+        case "iso-8859-1",
+             "iso_8859-1":
+            return String.Encoding.isoLatin1
+        case "iso-8859-2",
+             "iso_8859-2":
+            return String.Encoding.isoLatin2
+        case "windows-1250",
+             "cp1250",
+             "cp-1250",
+             "1250":
+            return String.Encoding.windowsCP1250
+        case "windows-1251",
+             "cp1251",
+             "cp-1251",
+             "1251":
+            return String.Encoding.windowsCP1251
+        case "windows-1252",
+             "cp1252",
+             "cp-1252",
+             "1252":
+            return String.Encoding.windowsCP1252
+        case "windows-1253",
+             "cp1253",
+             "cp-1253",
+             "1253":
+            return String.Encoding.windowsCP1253
+        case "windows-1254",
+             "cp1254",
+             "cp-1254",
+             "1254":
+            return String.Encoding.windowsCP1254
+        case "macintosh",
+             "mac":
+            return String.Encoding.macOSRoman
+        case "utf61",
+             "utf-16":
+            return String.Encoding.utf16
+        case "utf32",
+             "utf-32":
+            return String.Encoding.utf32
+        default:
+            throw OFException.invalidEncoding()
+        }
+    }
+}
+
 internal func encodingForContentType(_ contentType: String?) -> String.Encoding {
     guard let contentType = contentType else {
         return .utf8
@@ -119,7 +174,11 @@ internal func encodingForContentType(_ contentType: String?) -> String.Encoding 
             }
         }
         
+        guard let encoding = try? String.parseEncoding(charset) else {
+            return .utf8
+        }
         
+        return encoding
     }
 }
 
