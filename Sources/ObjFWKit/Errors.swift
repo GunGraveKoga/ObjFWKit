@@ -186,4 +186,8 @@ public enum OFException {
     public static func invalidArgument() -> NSError {
         return NSError(domain: OFExceptionDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: ""])
     }
+    
+    public static func invalidEncoding(_ encoding: String.Encoding) -> NSError {
+        return NSError(domain: OFExceptionDomain, code:NSURLErrorCannotDecodeContentData, userInfo: [NSStringEncodingErrorKey: NSNumber(value: encoding.rawValue)] )
+    }
 }

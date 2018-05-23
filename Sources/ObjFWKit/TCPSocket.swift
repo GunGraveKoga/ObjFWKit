@@ -17,7 +17,9 @@ fileprivate let __OFTCPSocketObserverCallback: CFSocketCallBack = {(socketObject
     
     if callbackType.contains(.readCallBack) {
         observer.readyForReading()
-    } else if callbackType.contains(.writeCallBack) {
+    }
+    
+    if callbackType.contains(.writeCallBack) {
         observer.readyForWriting()
     }
 }
