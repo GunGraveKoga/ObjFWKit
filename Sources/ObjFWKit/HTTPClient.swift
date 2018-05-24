@@ -65,6 +65,8 @@ open class OFHTTPClient {
     
     internal var _lastResponse: OFHTTPResponse!
     
+    public init() {}
+    
     open func performRequest(_ request: OFHTTPRequest, redirects: UInt = 10, context: AnyObject? = nil) -> (response: OFHTTPResponse?, error: Error?) {
         
         let syncPerformer = OFHTTPClient_SyncPerformer(withClient: self)
@@ -79,6 +81,10 @@ open class OFHTTPClient {
         
         guard scheme == "http" || scheme == "https" else {
             throw OFException.unsupportedProtocol(request.URL)
+        }
+        
+        guard let _ = request.URL.host else {
+            throw OFException.invalidArgument()
         }
         
         guard !_inProgress else {
@@ -170,10 +176,76 @@ fileprivate func constructRequestString(_ request: OFHTTPRequest) throws -> Stri
     guard let components = URLComponents(url: request.URL, resolvingAgainstBaseURL: true) else {
         throw OFException.badURL(request.URL)
     }
+    
+    var requestString = request.method.rawValue
+    
+    var path = components.percentEncodedPath
+    
+    if path == "" {
+        path = "/"
+    }
+    
+    requestString += " " + path
+    if let query = components.percentEncodedQuery {
+        requestString += "?" + query
+    }
+    
+    requestString += " HTTP/\(request.protocolVersion.description)\\r\\n"
+    
+    var headers = request.headers ?? [String: String]()
+    
+    if headers["Host"] == nil {
+        if let port = components.port {
+            headers["Host"] = "\(components.host!):\(port)"
+        } else {
+            headers["Host"] = components.host!
+        }
+    }
+    
+    if let user = components.user, let password = components.password, headers["Authorization"] == nil {
+        let authorizationString = user + ":" + password
+        headers["Authorization"] = "Basic " + authorizationString.data(using: .utf8)!.base64EncodedString()
+    }
+    
+    if headers["User-Agent"] == nil {
+        headers["User-Agent"] = "Something using ObjFW <https://heap.zone/objfw>"
+    }
+    
+    if request.protocolVersion.major == 1
+        && request.protocolVersion.minor == 0
+        && headers["Connection"] == nil {
+        headers["Connection"] = "keep-alive"
+    }
+    
+    if headers["Content-Length"] != nil && headers["Content-Type"] == nil {
+        headers["Content-Type"] = "application/x-www-form-urlencoded; charset=UTF-8"
+    }
+    
+    for (key, value) in headers {
+        requestString += "\(key): \(value)\\r\\n"
+    }
+    
+    return requestString + "\\r\\n"
 }
 
 fileprivate func normalizeKey(_ key: String) -> String {
+    var normolizedKey = ""
+    let set = CharacterSet.letters
+    var firstLetter = false
     
+    for character in key.unicodeScalars {
+        if set.contains(character) {
+            firstLetter = true
+            normolizedKey += String(character)
+            continue
+        }
+        
+        let ch = String(character)
+        normolizedKey += firstLetter ? ch.uppercased() : ch.lowercased()
+        firstLetter = false
+    }
+    
+    return normolizedKey
 }
 
 fileprivate class OFHTTPClientRequestHandler {
@@ -197,7 +269,9 @@ fileprivate class OFHTTPClientRequestHandler {
     func start() throws {
         var socket: OFTCPSocket
         
-        if let lastScheme = _client._lastURL.scheme, let requstScheme = _request.URL.scheme, let lastHost = _client._lastURL.host, let requestHost = _request.URL.host, let lastPort = _client._lastURL.port, let requestPort = _request.URL.port, _client._socket != nil && !((try? _client._socket.atEndOfStream()) ?? true) && lastScheme == requstScheme && lastHost == requestHost && lastPort == requestPort {
+        if _client._lastURL != nil && _client._socket != nil && !((try? _client._socket.atEndOfStream()) ?? true)
+            && _client._lastURL.scheme! == _request.URL.scheme!
+            && _client._lastURL.host! == _request.URL.host! && _client._lastURL.port == _request.URL.port && _client._lastURL.path == _request.URL.path  {
             
             socket = _client._socket
             _client._socket = nil
@@ -556,7 +630,7 @@ fileprivate class OFHTTPClientRequestHandler {
 
 fileprivate class OFHTTPClientRequestBodyStream: OFStream {
     var _handler: OFHTTPClientRequestHandler
-    var _socket: OFTCPSocket
+    var _socket: OFTCPSocket!
     var _toWrite: Int = 0
     var _atEndOfStream: Bool = false
     
@@ -574,10 +648,71 @@ fileprivate class OFHTTPClientRequestBodyStream: OFStream {
             throw OFException.invalidArgument()
         }
     }
+    
+    override func lowLevelWrite(_ buffer: UnsafeRawPointer, length: Int) throws -> Int {
+        let requestedLength = length
+        var _length = length
+        var ret: Int
+        
+        guard _socket != nil else {
+            throw OFException.notOpen(stream: self)
+        }
+        
+        guard !_atEndOfStream else {
+            throw OFException.writeFailed(stream: self, requestedLength: requestedLength, bytesWritten: 0, error: 0)
+        }
+        
+        if _length > _toWrite {
+            _length = _toWrite
+        }
+        
+        ret = try _socket.write(buffer: buffer, length: _length)
+        
+        guard ret <= _length else {
+            throw OFException.outOfRange()
+        }
+        
+        _toWrite -= ret
+        
+        if _toWrite == 0 {
+            _atEndOfStream = true
+        }
+        
+        guard requestedLength <= _length else {
+            throw OFException.writeFailed(stream: self, requestedLength: requestedLength, bytesWritten: ret, error: 0)
+        }
+        
+        return ret
+    }
+    
+    override func lowLevelIsAtEndOfStream() throws -> Bool {
+        return _atEndOfStream
+    }
+    
+    override func close() throws {
+        if _socket == nil {
+            return
+        }
+        
+        guard _toWrite <= 0 else {
+            throw OFException.truncatedData()
+        }
+        
+        let handler = _handler
+        _socket.asyncReadLine {
+            handler.socke($0 as! OFTCPSocket, didReadLine: $1, error: $2)
+        }
+        
+        _socket = nil
+    }
+    
+    deinit {
+        try! self.close()
+    }
 }
 
 fileprivate class OFHTTPClientResponse: OFHTTPResponse {
-    private var _socket: OFTCPSocket
+    private var _socket: OFTCPSocket!
     private var _hasContentLength: Bool = false
     private var _chanked: Bool = false
     var of_keepAlive: Bool = false
@@ -606,5 +741,144 @@ fileprivate class OFHTTPClientResponse: OFHTTPResponse {
     
     init(withSocket socket: OFTCPSocket) {
         _socket = socket
+    }
+    
+    override func lowLevelRead(into buffer: inout UnsafeMutableRawPointer, length: Int) throws -> Int {
+        guard _socket != nil else {
+            throw OFException.notOpen(stream: self)
+        }
+        
+        if _atEndOfStream {
+            return 0
+        }
+        
+        if !_hasContentLength && !_chanked {
+            return try _socket.read(into: &buffer, length: length)
+        }
+        
+        let socketAtEndOfStream = try _socket.atEndOfStream()
+        
+        guard !socketAtEndOfStream else {
+            throw OFException.truncatedData()
+        }
+        
+        if !_chanked {
+            var ret: Int
+            var _length = length
+            
+            if _length > _toRead {
+                _length = _toRead
+            }
+            
+            ret = try _socket.read(into: &buffer, length: _length)
+            
+            guard ret <= _length else {
+                throw OFException.outOfRange()
+            }
+            
+            _toRead -= ret
+            
+            if _toRead == 0 {
+                _atEndOfStream = true
+                
+                if !of_keepAlive {
+                    _socket = nil
+                }
+            }
+            
+            return ret
+        }
+        
+        if _toRead > 0 {
+            var _length = length
+            
+            if length > _toRead {
+                _length = _toRead
+            }
+            
+            _length = try _socket.read(into: &buffer, length: _length)
+            
+            _toRead -= _length
+            
+            if _toRead == 0 {
+                let line = try _socket.readLine()
+                
+                if line != nil && line!.count > 0 {
+                    throw OFException.invalidServerReply()
+                }
+            }
+            
+            return _length
+            
+        } else {
+            var line: String?
+            
+            do {
+                line = try _socket.readLine()
+            } catch {
+                throw OFException.invalidServerReply()
+            }
+            
+            if let index = line?.index(of: ";") {
+                line = String(line![line!.startIndex..<index])
+            }
+            
+            let toRead = Int(line!) ?? -1
+            
+            guard toRead >= 0 else {
+                throw OFException.invalidServerReply()
+            }
+            
+            if _toRead == 0 {
+                _atEndOfStream = true
+                
+                if of_keepAlive {
+                    do {
+                        line = try _socket.readLine()
+                    } catch {
+                        throw OFException.invalidServerReply()
+                    }
+                    
+                    guard (line?.count ?? 0) <= 0 else {
+                        throw OFException.invalidServerReply()
+                    }
+                } else {
+                    _socket = nil
+                }
+            }
+            
+            return 0
+        }
+    }
+    
+    override func lowLevelIsAtEndOfStream() throws -> Bool {
+        if _atEndOfStream {
+            return true
+        }
+        
+        guard _socket != nil else {
+            throw OFException.notOpen(stream: self)
+        }
+        
+        if !_hasContentLength && !_chanked {
+            return try _socket.atEndOfStream()
+        }
+        
+        return _atEndOfStream
+    }
+    
+    override var hasDataInReadBuffer: Bool {
+        return (super.hasDataInReadBuffer || _socket.hasDataInReadBuffer)
+    }
+    
+    override func close() throws {
+        _atEndOfStream = false
+        _socket = nil
+        
+        try super.close()
+    }
+    
+    deinit {
+        try! self.close()
     }
 }

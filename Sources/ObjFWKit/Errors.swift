@@ -212,6 +212,6 @@ public enum OFException {
     }
     
     public static func requestFailed(_ request: OFHTTPRequest, response: OFHTTPResponse) -> NSError {
-        return NSError(domain: NSURLErrorDomain, code: URLError.badServerResponse)
+        return NSError(domain: NSURLErrorDomain, code: URLError.badServerResponse.rawValue)
     }
 }

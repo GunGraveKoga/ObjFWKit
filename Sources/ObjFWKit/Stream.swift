@@ -769,6 +769,10 @@ open class OFStream {
                     
                     ret = String(data: Data(bytesNoCopy: _readBuffer, count: retLength, deallocator: .none), encoding: encoding)
                     
+                    guard ret != nil else {
+                        throw OFException.invalidEncoding(encoding)
+                    }
+                    
                     _readBuffer = _readBuffer.advanced(by: i + 1)
                     _readBufferLength -= i + 1
                     _waitingForDelimiter = false
@@ -792,6 +796,10 @@ open class OFStream {
             }
             
             ret = String(data: Data(bytesNoCopy: _readBuffer, count: retLength, deallocator: .none), encoding: encoding)
+            
+            guard ret != nil else {
+                throw OFException.invalidEncoding(encoding)
+            }
             
             _readBuffer = nil
             _readBufferLength = 0
@@ -846,7 +854,7 @@ open class OFStream {
                             _readBufferLength += bufferLength
                         }
                         
-                        return nil
+                        throw OFException.invalidEncoding(encoding)
                     }
                     
                     if _readBuffer != nil {
