@@ -7,6 +7,14 @@
 
 import Foundation
 
+public protocol OFReadyForReadingObserving: class {
+    var sourceForReading: CFRunLoopSource {get}
+}
+
+public protocol OFReadyForWritingObserving: class {
+    var sourceForWriting: CFRunLoopSource {get}
+}
+
 open class OFStream {
     public enum ByteOrder {
         case bigEndian
@@ -53,7 +61,6 @@ open class OFStream {
     
     open var writeBuffered: Bool = false
     internal var _blocking: Bool = true
-    internal var _observer: OFStreamObserver!
     
     open var isBlocking: Bool {
         get {
@@ -90,7 +97,7 @@ open class OFStream {
         return _readBufferLength > 0
     }
     
-    open func read(into buffer: inout UnsafeMutableRawPointer, length: Int) throws -> Int {
+    open func readIntoBuffer(_ buffer: inout UnsafeMutableRawPointer, length: Int) throws -> Int {
         if _readBufferLength == 0 {
             if length < OFStream.MIN_READ_SIZE {
                 var tmp = UnsafeMutableRawPointer.allocate(bytes: OFStream.MIN_READ_SIZE, alignedTo: MemoryLayout<UInt8>.size)
@@ -141,16 +148,12 @@ open class OFStream {
         }
     }
     
-    open func asyncRead(into buffer: inout UnsafeMutableRawPointer, length: Int, _ body: @escaping (OFStream, UnsafeMutableRawPointer, Int, Error?) -> Bool) {
+    open func asyncRead(into buffer: inout UnsafeMutableRawPointer, length: Int, _ body: @escaping OFAsyncReadBufferBlock) {
         
-        if self._observer != nil {
-            self._observer.addReadItem(ReadQueueItem(buffer, length, body))
-            
-            self._observer.startObserving()
-        }
+        StreamObserver.current._addAsyncReadForStream(self, buffer: buffer, length: length, block: body)
     }
     
-    open func read(into buffer: inout UnsafeMutableRawPointer, exactLength length: Int) throws {
+    open func readIntoBuffer(_ buffer: inout UnsafeMutableRawPointer, exactLength length: Int) throws {
         var readLength = Int(0)
         
         while readLength < length {
@@ -159,17 +162,13 @@ open class OFStream {
             }
             
             var tmp = buffer + readLength
-            readLength += try self.read(into: &tmp, length: length - readLength)
+            readLength += try self.readIntoBuffer( &tmp, length: length - readLength)
         }
     }
     
-    open func asyncRead(into buffer: inout UnsafeMutableRawPointer, exactLength length: Int, _ body: @escaping (OFStream, UnsafeMutableRawPointer, Int, Error?) -> Bool) {
+    open func asyncRead(into buffer: inout UnsafeMutableRawPointer, exactLength length: Int, _ body: @escaping OFAsyncReadBufferBlock) {
         
-        if self._observer != nil {
-            self._observer.addReadItem(ExactReadQueueItem(buffer, length, body))
-            
-            self._observer.startObserving()
-        }
+        StreamObserver.current._addAsyncReadForStream(self, buffer: buffer, exactLength: length, block: body)
     }
     
     @discardableResult
@@ -192,13 +191,9 @@ open class OFStream {
         }
     }
     
-    open func asyncWrite(buffer: UnsafeRawPointer, length: Int, _ body: @escaping (OFStream, UnsafeMutablePointer<UnsafeRawPointer>, Int, Error?) -> Int) {
+    open func asyncWrite(buffer: UnsafeRawPointer, length: Int, _ body: @escaping OFAsyncWriteBufferBlock) {
         
-        if self._observer != nil {
-            self._observer.addWriteItem(WriteQueueItem(buffer, length, body))
-            
-            self._observer.startObserving()
-        }
+        StreamObserver.current._addAsyncWriteForStream(self, buffer: buffer, length: length, block: body)
     }
     
     @inline(__always)
@@ -209,7 +204,7 @@ open class OFStream {
             buffer.deallocate(bytes: MemoryLayout<T>.size, alignedTo: MemoryLayout<T>.alignment)
         }
         
-        try self.read(into: &buffer, exactLength: MemoryLayout<T>.size)
+        try self.readIntoBuffer( &buffer, exactLength: MemoryLayout<T>.size)
         
         return buffer.assumingMemoryBound(to: T.self).pointee
     }
@@ -361,7 +356,7 @@ open class OFStream {
         var buffer = UnsafeMutableRawPointer.allocate(bytes: size, alignedTo: MemoryLayout<T>.alignment)
         
         do {
-            try self.read(into: &buffer, exactLength: size)
+            try self.readIntoBuffer( &buffer, exactLength: size)
         } catch {
             buffer.deallocate(bytes: size, alignedTo: MemoryLayout<T>.alignment)
             
@@ -581,7 +576,7 @@ open class OFStream {
         var buffer = UnsafeMutableRawPointer.allocate(bytes: count, alignedTo: MemoryLayout<UInt8>.alignment)
         
         do {
-            try self.read(into: &buffer, exactLength: count)
+            try self.readIntoBuffer( &buffer, exactLength: count)
         } catch {
             buffer.deallocate(bytes: count, alignedTo: MemoryLayout<UInt8>.alignment)
             
@@ -602,7 +597,7 @@ open class OFStream {
         }
         
         while try !self.atEndOfStream() {
-            let length = try self.read(into: &buffer, length: pageSyze)
+            let length = try self.readIntoBuffer( &buffer, length: pageSyze)
             
             data.append(buffer.assumingMemoryBound(to: UInt8.self), count: length)
         }
@@ -901,13 +896,9 @@ open class OFStream {
         return line
     }
     
-    open func asyncReadLine(withEncoding encoding: String.Encoding = .utf8, _ body: @escaping (OFStream, String?, Error?) -> Bool) {
+    open func asyncReadLine(withEncoding encoding: String.Encoding = .utf8, _ body: @escaping OFAsyncReadLineBlock) {
         
-        if self._observer != nil {
-            self._observer.addReadItem(ReadLineQueueItem(encoding, body))
-            
-            self._observer.startObserving()
-        }
+        StreamObserver.current._addAsyncReadLineForStream(self, encoding: encoding, block: body)
     }
     
     open func tryReadString(tillDelimiter delimiter: String, encoding: String.Encoding = .utf8) throws -> String? {
@@ -1124,9 +1115,7 @@ open class OFStream {
     }
     
     open func cancelAsyncRequests() {
-        if self._observer != nil {
-            self._observer.cancelObserving()
-        }
+        StreamObserver.current._cancelAsyncRequestsForObject(self)
     }
 }
 

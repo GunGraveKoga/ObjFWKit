@@ -190,7 +190,7 @@ fileprivate func constructRequestString(_ request: OFHTTPRequest) throws -> Stri
         requestString += "?" + query
     }
     
-    requestString += " HTTP/\(request.protocolVersion.description)\\r\\n"
+    requestString += " HTTP/\(request.protocolVersion.description)\r\n"
     
     var headers = request.headers ?? [String: String]()
     
@@ -222,10 +222,10 @@ fileprivate func constructRequestString(_ request: OFHTTPRequest) throws -> Stri
     }
     
     for (key, value) in headers {
-        requestString += "\(key): \(value)\\r\\n"
+        requestString += "\(key): \(value)\r\n"
     }
     
-    return requestString + "\\r\\n"
+    return requestString + "\r\n"
 }
 
 fileprivate func normalizeKey(_ key: String) -> String {
@@ -753,7 +753,7 @@ fileprivate class OFHTTPClientResponse: OFHTTPResponse {
         }
         
         if !_hasContentLength && !_chanked {
-            return try _socket.read(into: &buffer, length: length)
+            return try _socket.readIntoBuffer( &buffer, length: length)
         }
         
         let socketAtEndOfStream = try _socket.atEndOfStream()
@@ -770,7 +770,7 @@ fileprivate class OFHTTPClientResponse: OFHTTPResponse {
                 _length = _toRead
             }
             
-            ret = try _socket.read(into: &buffer, length: _length)
+            ret = try _socket.readIntoBuffer( &buffer, length: _length)
             
             guard ret <= _length else {
                 throw OFException.outOfRange()
@@ -796,7 +796,7 @@ fileprivate class OFHTTPClientResponse: OFHTTPResponse {
                 _length = _toRead
             }
             
-            _length = try _socket.read(into: &buffer, length: _length)
+            _length = try _socket.readIntoBuffer( &buffer, length: _length)
             
             _toRead -= _length
             

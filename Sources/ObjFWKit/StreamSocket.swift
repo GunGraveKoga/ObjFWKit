@@ -185,7 +185,24 @@ public func ConnectSocket(_ socket: OFStreamSocket.Socket, toAddress address: OF
     }
 }
 
-open class OFStreamSocket: OFStream {
+fileprivate func processSocketEvents(_ socketObject: CFSocket?, _ callbackType: CFSocketCallBackType, _ address: CFData?, _ data: UnsafeRawPointer?, _ info: UnsafeMutableRawPointer?) -> Swift.Void {
+    
+    guard let info = info else {
+        preconditionFailure("Missing socket context pointer!")
+    }
+    
+    let unmanaged = Unmanaged<OFStreamSocket.Socket>.fromOpaque(info).takeUnretainedValue()
+    
+    if callbackType.contains(.readCallBack) {
+        StreamObserver.current.sourceReadyForReading(unmanaged.runLoopSource)
+    }
+    
+    if callbackType.contains(.writeCallBack) {
+        StreamObserver.current.sourceReadyForWriting(unmanaged.runLoopSource)
+    }
+}
+
+open class OFStreamSocket: OFStream, OFReadyForReadingObserving, OFReadyForWritingObserving {
     
     public enum SocketProtocolFamily: RawRepresentable {
         public typealias RawValue = Int32
@@ -729,11 +746,11 @@ open class OFStreamSocket: OFStream {
         
     }
     
-    public struct Socket: RawRepresentable {
+    public final class Socket: RawRepresentable, Hashable {
         
         public typealias RawValue = CFSocketNativeHandle
         
-        private var _socket: Socket.RawValue
+        private var _socket: CFSocket!
         
         private static func _initializeSockets() -> Bool {
             #if os(Windows)
@@ -747,6 +764,10 @@ open class OFStreamSocket: OFStream {
             return true
         }
         
+        public var hashValue: Int {
+            return _socket.hashValue
+        }
+        
         #if os(Windows)
         public static var INVALID_SOCKET: Socket.RawValue = Socket.RawValue(bitPattern: Int(-1))
         #else
@@ -755,25 +776,100 @@ open class OFStreamSocket: OFStream {
         
         private static var _initialized = Socket._initializeSockets()
         
+        public lazy var runLoopSource: CFRunLoopSource = {
+           return CFSocketCreateRunLoopSource(nil, _socket, 0)
+        }()
+        
         public var rawValue: Socket.RawValue {
-            return _socket
+            return CFSocketGetNative(_socket)
         }
         
-        public init?(rawValue: Socket.RawValue) {
-            guard Socket._initialized, rawValue != Socket.INVALID_SOCKET else {
+        public required init?(rawValue: Socket.RawValue) {
+            guard Socket._initialized && rawValue != Socket.INVALID_SOCKET else {
                 return nil
             }
             
-            _socket = rawValue
+            let unmanaged = Unmanaged.passUnretained(self)
+            var context = CFSocketContext(version: 0, info: unmanaged.toOpaque(), retain: nil, release: nil, copyDescription: nil)
+            let callbackType: CFSocketCallBackType = [.readCallBack, .writeCallBack]
+            
+            _socket = CFSocketCreateWithNative(nil, rawValue, callbackType.rawValue, processSocketEvents, &context)
+            
+            guard _socket != nil else {
+                return nil
+            }
+            
+            var flags = self.getSocketFlags()
+            
+            flags &= ~kCFSocketCloseOnInvalidate
+            flags |= (kCFSocketLeaveErrors | kCFSocketAutomaticallyReenableReadCallBack | kCFSocketAutomaticallyReenableWriteCallBack)
+            
+            self.setSocketFlags(flags)
         }
         
-        public init?(family: OFStreamSocket.SocketProtocolFamily, type: OFStreamSocket.SocketType, `protocol` _protocol: OFStreamSocket.SocketProtocol) {
+        public convenience init?(family: OFStreamSocket.SocketProtocolFamily, type: OFStreamSocket.SocketType, `protocol` _protocol: OFStreamSocket.SocketProtocol) {
+            guard Socket._initialized else {
+                return nil
+            }
+            
             self.init(rawValue: socket(family.rawValue, type.rawValue | SOCK_CLOEXEC, _protocol.rawValue))
+        }
+        
+        public func invalidate() {
+            CFSocketInvalidate(_socket)
+        }
+        
+        public func getSocketFlags() -> CFOptionFlags {
+            return CFSocketGetSocketFlags(_socket)
+        }
+        
+        public func setSocketFlags(_ v: CFOptionFlags) {
+            CFSocketSetSocketFlags(_socket, v)
+        }
+        
+        public func enableCallBacks(_ type: CFSocketCallBackType) {
+            CFSocketEnableCallBacks(_socket, type.rawValue)
+        }
+        
+        public func disableCallBacks(_ type: CFSocketCallBackType) {
+            CFSocketDisableCallBacks(_socket, type.rawValue)
+        }
+        
+        public func localAddress() -> SocketAddress? {
+            guard let addressData = CFSocketCopyAddress(_socket) else {
+                return nil
+            }
+            
+            guard let addr = UnsafeMutableRawPointer(mutating: CFDataGetBytePtr(addressData)) else {
+                return nil
+            }
+            
+            return SocketAddress(addr.bindMemory(to: sockaddr.self, capacity: 1))
+        }
+        
+        public func peerAddress() -> SocketAddress? {
+            guard let addressData = CFSocketCopyPeerAddress(_socket) else {
+                return nil
+            }
+            
+            guard let addr = UnsafeMutableRawPointer(mutating: CFDataGetBytePtr(addressData)) else {
+                return nil
+            }
+            
+            return SocketAddress(addr.bindMemory(to: sockaddr.self, capacity: 1))
         }
     }
     
     internal var _socket: OFStreamSocket.Socket!
     internal var _atEndOfStream: Bool = false
+    
+    open var sourceForReading: CFRunLoopSource {
+        return _socket.runLoopSource
+    }
+    
+    open var sourceForWriting: CFRunLoopSource {
+        return _socket.runLoopSource
+    }
     
     open override func lowLevelIsAtEndOfStream() throws -> Bool {
         guard _socket != nil else {
@@ -877,6 +973,11 @@ open class OFStreamSocket: OFStream {
         _atEndOfStream = false
         
         try super.close()
+    }
+    
+    open override func cancelAsyncRequests() {
+        _socket.invalidate()
+        super.cancelAsyncRequests()
     }
     
     deinit {

@@ -11,66 +11,6 @@ import Foundation
 import CWin32
 #endif
 
-fileprivate let __OFTCPSocketObserverCallback: CFSocketCallBack = {(socketObject: CFSocket?, callbackType: CFSocketCallBackType, address: CFData?, data: UnsafeRawPointer?, info: UnsafeMutableRawPointer?) -> Swift.Void in
-    
-    let observer = Unmanaged<OFTCPSocketObserver>.fromOpaque(info!).takeUnretainedValue()
-    
-    if callbackType.contains(.readCallBack) {
-        observer.readyForReading()
-    }
-    
-    if callbackType.contains(.writeCallBack) {
-        observer.readyForWriting()
-    }
-}
-
-fileprivate final class OFTCPSocketObserver<T>: OFStreamObserver where T: OFTCPSocket {
-    private var _socket: CFSocket!
-    private var _socketSource: CFRunLoopSource!
-    
-    convenience init?(withSocket socket: T) {
-        self.init(stream: socket)
-    }
-    
-    required init?(stream: AnyObject) {
-        guard let stream = stream as? T else {
-            return nil
-        }
-        
-        super.init(stream: stream)
-        
-        let unmanaged = Unmanaged<OFTCPSocketObserver>.passUnretained(self)
-        
-        var context = CFSocketContext(version: 0, info: unmanaged.toOpaque(), retain: nil, release: nil, copyDescription: nil)
-        let callbackType: CFSocketCallBackType = [.readCallBack, .writeCallBack]
-        
-        _socket = CFSocketCreateWithNative(nil, stream._socket.rawValue, callbackType.rawValue, __OFTCPSocketObserverCallback, &context)
-        
-        guard _socket != nil else {
-            return nil
-        }
-        
-        _socketSource = CFSocketCreateRunLoopSource(nil, _socket, 0)
-        
-        guard _socketSource != nil else {
-            return nil
-        }
-    }
-    
-    override func observe() {
-        #if os(macOS)
-        CFRunLoopAddSource(RunLoop.current.getCFRunLoop(), _socketSource, CFRunLoopMode.commonModes)
-        #else
-        CFRunLoopAddSource(RunLoop.current.getCFRunLoop(), _socketSource, CFRunLoopMode.commonModes.rawValue)
-        #endif
-    }
-    
-    override func cancelObserving() {
-        CFSocketInvalidate(_socket)
-        super.cancelObserving()
-    }
-}
-
 open class OFTCPSocket: OFStreamSocket {
     private static var _defaultSOCKS5Host: String?
     private static var _defaultSOCKS5Port: UInt16 = 1080
@@ -168,8 +108,6 @@ open class OFTCPSocket: OFStreamSocket {
         if self.SOCKS5Host != nil {
             try self._SOCKS5ConnectToHost(destinationHost, port: destinationPort)
         }
-        
-        _observer = OFTCPSocketObserver(withSocket: self)
     }
     
     open func asyncConnectToHost(_ host: String, port: UInt16, _ body: @escaping (OFTCPSocket, Error?) -> Void) {
@@ -231,7 +169,6 @@ open class OFTCPSocket: OFStreamSocket {
             }
             
             if port > 0 {
-                _observer = OFTCPSocketObserver(withSocket: self)
                 return port
             }
             
@@ -248,12 +185,10 @@ open class OFTCPSocket: OFStreamSocket {
             switch boundAddress {
             case .ipv4(var _address):
                 return withUnsafeMutablePointer(to: &_address) {
-                    _observer = OFTCPSocketObserver(withSocket: self)
                     return $0.pointee.sin_port
                 }
             case .ipv6(var _address):
                 return withUnsafeMutablePointer(to: &_address) {
-                    _observer = OFTCPSocketObserver(withSocket: self)
                     return $0.pointee.sin6_port
                 }
             default:
@@ -308,11 +243,7 @@ open class OFTCPSocket: OFStreamSocket {
     }
     
     open func asyncAccept<T>(_ body: @escaping (T, T?, Error?) -> Bool) where T: OFTCPSocket {
-        if self._observer != nil {
-            self._observer.addReadItem(AcceptQueueItem<T>(body))
-            
-            self._observer.startObserving()
-        }
+        
     }
     
     open func isKeepAliveEnabled() throws -> Bool {
@@ -381,7 +312,6 @@ open class OFTCPSocket: OFStreamSocket {
     
     open override func close() throws {
         self.listening = false
-        self._observer = nil
         
         try super.close()
     }

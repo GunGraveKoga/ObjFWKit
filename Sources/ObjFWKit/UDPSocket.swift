@@ -7,69 +7,8 @@
 
 import Foundation
 
-fileprivate let __OFUDPSocketObserverCallback: CFSocketCallBack = {(socketObject: CFSocket?, callbackType: CFSocketCallBackType, address: CFData?, data: UnsafeRawPointer?, info: UnsafeMutableRawPointer?) -> Swift.Void in
-    
-    let observer = Unmanaged<OFUDPSocketObserver>.fromOpaque(info!).takeUnretainedValue()
-    
-    if callbackType.contains(.readCallBack) {
-        observer.readyForReading()
-    }
-    
-    if callbackType.contains(.writeCallBack) {
-        observer.readyForWriting()
-    }
-}
-
-fileprivate final class OFUDPSocketObserver<T>: OFStreamObserver where T: OFUDPSocket {
-    private var _socket: CFSocket!
-    private var _socketSource: CFRunLoopSource!
-    
-    convenience init?(withSocket socket: T) {
-        self.init(stream: socket)
-    }
-    
-    required init?(stream: AnyObject) {
-        guard let stream = stream as? T else {
-            return nil
-        }
-        
-        super.init(stream: stream)
-        
-        let unmanaged = Unmanaged<OFUDPSocketObserver>.passUnretained(self)
-        
-        var context = CFSocketContext(version: 0, info: unmanaged.toOpaque(), retain: nil, release: nil, copyDescription: nil)
-        let callbackType: CFSocketCallBackType = [.readCallBack, .writeCallBack]
-        
-        _socket = CFSocketCreateWithNative(nil, stream._socket.rawValue, callbackType.rawValue, __OFUDPSocketObserverCallback, &context)
-        
-        guard _socket != nil else {
-            return nil
-        }
-        
-        _socketSource = CFSocketCreateRunLoopSource(nil, _socket, 0)
-        
-        guard _socketSource != nil else {
-            return nil
-        }
-    }
-    
-    override func observe() {
-        #if os(macOS)
-            CFRunLoopAddSource(RunLoop.current.getCFRunLoop(), _socketSource, CFRunLoopMode.commonModes)
-        #else
-            CFRunLoopAddSource(RunLoop.current.getCFRunLoop(), _socketSource, CFRunLoopMode.commonModes.rawValue)
-        #endif
-    }
-    
-    override func cancelObserving() {
-        CFSocketInvalidate(_socket)
-        super.cancelObserving()
-    }
-}
-
 open class OFUDPSocket {
     internal var _socket: OFStreamSocket.Socket!
-    internal var _observer: OFStreamObserver!
     
     public required init() {
         
@@ -150,7 +89,6 @@ open class OFUDPSocket {
             }
             
             if port > 0 {
-                self._observer = OFUDPSocketObserver(withSocket: self)
                 return port
             }
             
@@ -167,12 +105,10 @@ open class OFUDPSocket {
             switch boundAddress {
             case .ipv4(var _address):
                 return withUnsafeMutablePointer(to: &_address) {
-                    self._observer = OFUDPSocketObserver(withSocket: self)
                     return $0.pointee.sin_port
                 }
             case .ipv6(var _address):
                 return withUnsafeMutablePointer(to: &_address) {
-                    self._observer = OFUDPSocketObserver(withSocket: self)
                     return $0.pointee.sin6_port
                 }
             default:
@@ -225,13 +161,9 @@ open class OFUDPSocket {
         return (ret, sender)
     }
     
-    open func asyncReceive(into buffer: inout UnsafeMutableRawPointer, length: Int, _ body: @escaping (OFUDPSocket, UnsafeMutableRawPointer, Int, OFStreamSocket.SocketAddress?, Error?) -> Bool) {
+    open func asyncReceive(into buffer: inout UnsafeMutableRawPointer, length: Int, _ body: @escaping OFUDPAsyncReceiveBlock) {
         
-        if self._observer != nil {
-            self._observer.addReadItem(UDPReceiveQueueItem(buffer, length, body))
-            
-            self._observer.startObserving()
-        }
+        StreamObserver.current._addAsyncReceiveForUDPSocket(self, buffer: buffer, length: length, block: body)
     }
     
     open func send(buffer: UnsafeRawPointer, length: Int, receiver: OFStreamSocket.SocketAddress) throws {
@@ -259,13 +191,9 @@ open class OFUDPSocket {
         }
     }
     
-    open func asyncSend(buffer: inout UnsafeRawPointer, length: Int, receiver: OFStreamSocket.SocketAddress, _ body: @escaping (OFUDPSocket, UnsafeMutablePointer<UnsafeRawPointer>, Int, OFStreamSocket.SocketAddress, Error?) -> Int) {
+    open func asyncSend(buffer: inout UnsafeRawPointer, length: Int, receiver: OFStreamSocket.SocketAddress, _ body: @escaping OFUDPAsyncSendBlock) {
         
-        if self._observer != nil {
-            self._observer.addWriteItem(UDPSendQueueItem(buffer, length, receiver, body))
-            
-            self._observer.startObserving()
-        }
+        StreamObserver.current._addAsyncSendForUDPSocket(self, buffer: buffer, length: length, receiver: receiver, block: body)
     }
     
     open func close() throws {
@@ -275,6 +203,11 @@ open class OFUDPSocket {
         
         CloseSocket(_socket)
         _socket = nil
+    }
+    
+    open func cancelAsyncRequests() {
+        _socket.invalidate()
+        StreamObserver.current._cancelAsyncRequestsForObject(self)
     }
     
     deinit {
