@@ -314,7 +314,13 @@ fileprivate class OFHTTPClientRequestHandler {
             }
             
             if _request.URL.scheme! == "https" {
-                throw OFException.unsupportedProtocol(_request.URL)
+                guard OFTLSSocketClass != nil else {
+                    throw OFException.unsupportedProtocol(_request.URL)
+                }
+                
+                sock = OFTLSSocketClass.init()
+                port = 443
+                
             } else {
                 sock = OFTCPSocket()
                 port = 80
