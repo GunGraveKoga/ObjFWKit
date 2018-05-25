@@ -125,7 +125,7 @@ open class OFUDPSocket {
         }
     }
     
-    open func receive(into buffer: inout UnsafeMutableRawPointer, length: Int) throws -> (length: Int, sender: SocketAddress) {
+    open func receive(into buffer: inout UnsafeMutableRawPointer, length: Int, sender: AutoreleasingUnsafeMutablePointer<SocketAddress?>?) throws -> Int {
         guard _socket != nil else {
             throw OFException.notOpen(stream: self)
         }
@@ -143,7 +143,7 @@ open class OFUDPSocket {
         }
         
         var ret = Int(-1)
-        let sender = SocketAddress {
+        let _sender = SocketAddress {
             #if !os(Windows)
                 ret = recvfrom(_socket.rawValue, tmp, length, 0, $0, $1)
             #else
@@ -158,7 +158,9 @@ open class OFUDPSocket {
         
         buffer.copyBytes(from: tmp, count: ret)
         
-        return (ret, sender)
+        sender?.pointee = _sender
+        
+        return ret
     }
     
     open func asyncReceive(into buffer: inout UnsafeMutableRawPointer, length: Int, _ body: @escaping OFUDPAsyncReceiveBlock) {

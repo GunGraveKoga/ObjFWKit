@@ -67,11 +67,17 @@ open class OFHTTPClient {
     
     public init() {}
     
-    open func performRequest(_ request: OFHTTPRequest, redirects: UInt = 10, context: AnyObject? = nil) -> (response: OFHTTPResponse?, error: Error?) {
+    open func performRequest(_ request: OFHTTPRequest, redirects: UInt = 10, context: AnyObject? = nil) throws -> OFHTTPResponse? {
         
         let syncPerformer = OFHTTPClient_SyncPerformer(withClient: self)
         
-        return syncPerformer.performRequest(request, redirects: redirects, context: context)
+        let (response, error) = syncPerformer.performRequest(request, redirects: redirects, context: context)
+        
+        guard error == nil else {
+            throw error!
+        }
+        
+        return response
     }
     
     open func asyncPerformRequest(_ request: OFHTTPRequest, redirects: UInt = 10, context: AnyObject? = nil) throws {
@@ -677,7 +683,7 @@ fileprivate class OFHTTPClientRequestBodyStream: OFStream {
             _length = _toWrite
         }
         
-        ret = try _socket.write(buffer: buffer, length: _length)
+        ret = try _socket.writeBuffer( buffer, length: _length)
         
         guard ret <= _length else {
             throw OFException.outOfRange()

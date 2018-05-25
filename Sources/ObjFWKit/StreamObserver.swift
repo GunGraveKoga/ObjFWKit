@@ -221,7 +221,7 @@ internal struct WriteQueueItem: QueueItem {
         
         do {
             let buffer = _buffer.advanced(by: _writtenLength)
-            length = try stream.write(buffer: buffer, length: _length - _writtenLength)
+            length = try stream.writeBuffer( buffer, length: _length - _writtenLength)
         } catch {
             exception = error
         }
@@ -266,15 +266,13 @@ internal struct UDPReceiveQueueItem: QueueItem {
         let stream = object as! OFUDPSocket
         
         var length = Int(0)
-        var receiver: SocketAddress? = nil
+        var sender: SocketAddress? = nil
         var exception: Error? = nil
         var shouldContinue = false
         
         repeat {
             do {
-                let (length_, receiver_) = try stream.receive(into: &_buffer, length: _length)
-                length = length_
-                receiver = receiver_
+                length = try stream.receive(into: &_buffer, length: _length, sender: AutoreleasingUnsafeMutablePointer<SocketAddress?>(&sender))
             } catch {
                 exception = error
             }
@@ -283,7 +281,7 @@ internal struct UDPReceiveQueueItem: QueueItem {
                 return true
             }
             
-            shouldContinue = _block(stream, _buffer, length, receiver, exception)
+            shouldContinue = _block(stream, _buffer, length, sender, exception)
             
             if (length == 0) {
                 return shouldContinue
@@ -337,6 +335,47 @@ internal struct UDPSendQueueItem: QueueItem {
     }
 }
 
+internal struct InputStreamQueueItem: QueueItem {
+    
+    mutating func handleObject(_ object: AnyObject?) -> Bool {
+        let stream = object as! OFStream
+        
+        let inputStream = stream.inputStream
+        
+        #if os(macOS)
+            if inputStream.delegate?.conforms(to: StreamDelegate.self) ?? false {
+                if inputStream.delegate!.responds(to: #selector(StreamDelegate.stream(_:handle:))) {
+                    inputStream.delegate!.stream!(inputStream, handle: Stream.Event.hasBytesAvailable)
+                }
+            }
+        #else
+            inputStream.delegate?.stream(inputStream, handle: Stream.Event.hasBytesAvailable)
+        #endif
+        
+        return true
+    }
+}
+
+internal struct OutputStreamQueueItem: QueueItem {
+    
+    mutating func handleObject(_ object: AnyObject?) -> Bool {
+        let stream = object as! OFStream
+        
+        let outputStream = stream.outputStream
+        
+        #if os(macOS)
+            if outputStream.delegate?.conforms(to: StreamDelegate.self) ?? false {
+                if outputStream.delegate!.responds(to: #selector(StreamDelegate.stream(_:handle:))) {
+                    outputStream.delegate!.stream!(outputStream, handle: Stream.Event.hasSpaceAvailable)
+                }
+            }
+        #else
+            outputStream.delegate?.stream(outputStream, handle: Stream.Event.hasSpaceAvailable)
+        #endif
+        
+        return true
+    }
+}
 
 fileprivate let CurrentObserverKey = "OFCurrentObserverKey"
 
@@ -424,6 +463,26 @@ public final class StreamObserver {
         self._addObjectForReading(socket, withQueueItem: queueItem)
     }
     
+    internal func _scheduleInputStream(_ stream: OFStream) {
+        guard let _ = stream as? OFReadyForReadingObserving else {
+            preconditionFailure("Not implemented")
+        }
+        
+        let queueItem = InputStreamQueueItem()
+        
+        self._addObjectForReading(stream, withQueueItem: queueItem)
+    }
+    
+    internal func _scheduleOutputStream(_ stream: OFStream) {
+        guard let _ = stream as? OFReadyForReadingObserving else {
+            preconditionFailure("Not implemented")
+        }
+        
+        let queueItem = OutputStreamQueueItem()
+        
+        self._addObjectForWriting(stream, withQueueItem: queueItem)
+    }
+    
     internal func _addAsyncSendForUDPSocket(_ socket: OFUDPSocket, buffer: UnsafeRawPointer, length: Int, receiver: SocketAddress, block: @escaping OFUDPAsyncSendBlock) {
         
         guard let _ = socket as? OFReadyForWritingObserving else {
@@ -462,7 +521,7 @@ public final class StreamObserver {
         self._addObjectForReading(object, withQueueItem: item)
     }
     
-    private func _removeObjectForReading(_ object: AnyObject) {
+    internal func _removeObjectForReading(_ object: AnyObject) {
         let objectToRemove = object as! OFReadyForReadingObserving
         
         guard _readQueue[objectToRemove.sourceForReading] != nil else {
@@ -501,7 +560,7 @@ public final class StreamObserver {
         self._addObjectForWriting(object, withQueueItem: item)
     }
     
-    private func _removeObjectForWriting(_ object: AnyObject) {
+    internal func _removeObjectForWriting(_ object: AnyObject) {
         let objectToRemove = object as! OFReadyForWritingObserving
         
         guard _writeQueue[objectToRemove.sourceForWriting] != nil else {
@@ -517,9 +576,7 @@ public final class StreamObserver {
     
     private func _processReadBuffers() {
         for (object, queue) in _readQueue {
-            if type(of: queue.0) == OFStream.self {
-                let stream = queue.0 as! OFStream
-                
+            if let stream = queue.0 as? OFStream {
                 if stream.hasDataInReadBuffer && !stream.of_waitForDelimiter() {
                     self._processReadQueue(forSource: object)
                 }
@@ -538,9 +595,7 @@ public final class StreamObserver {
                     
                     _readQueue[source]!.1.removeFirst()
                     
-                    if type(of: _readQueue[source]!.0) == OFStream.self {
-                        let stream = _readQueue[source]!.0 as! OFStream
-                        
+                    if let stream = _readQueue[source]!.0 as? OFStream {
                         if stream.hasDataInReadBuffer && !stream.of_waitForDelimiter() {
                             self._processReadQueue(forSource: source)
                         }

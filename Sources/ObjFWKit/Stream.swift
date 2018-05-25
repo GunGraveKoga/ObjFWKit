@@ -68,6 +68,11 @@ open class OFStream {
         }
     }
     
+    
+    open lazy var outputStream: OutputStream = OFOutputStream(ofStream: self)
+    
+    open lazy var inputStream: InputStream = OFInputStream(ofStream: self)
+    
     open func setBlocking(_ enable: Bool) throws {
         throw OFException.notImplemented(method: #function, inStream: type(of: self))
     }
@@ -172,7 +177,7 @@ open class OFStream {
     }
     
     @discardableResult
-    open func write(buffer: UnsafeRawPointer, length: Int) throws -> Int {
+    open func writeBuffer(_ buffer: UnsafeRawPointer, length: Int) throws -> Int {
         if !writeBuffered {
             let bytesWritten = try self.lowLevelWrite(buffer, length: length)
             
@@ -271,14 +276,14 @@ open class OFStream {
         var _v = v
         
         _ = try withUnsafePointer(to: &_v) {
-            try self.write(buffer: $0, length: MemoryLayout<T>.size)
+            try self.writeBuffer( $0, length: MemoryLayout<T>.size)
         }
     }
     
     open func writeInt8(_ v: UInt8) throws {
         var _v = v
         _ = try withUnsafePointer(to: &_v) {
-            try self.write(buffer: $0, length: MemoryLayout<UInt8>.size)
+            try self.writeBuffer( $0, length: MemoryLayout<UInt8>.size)
         }
     }
     
@@ -467,7 +472,7 @@ open class OFStream {
     internal func _writeIntegers<T>(_ v: UnsafePointer<T>, _ count: Int) throws -> Int where T: FixedWidthInteger {
         let size = count * MemoryLayout<T>.size
         
-        try self.write(buffer: v, length: size)
+        try self.writeBuffer( v, length: size)
         
         return size
     }
@@ -736,7 +741,7 @@ open class OFStream {
     @discardableResult
     open func writeData(_ data: Data) throws -> Int {
         _ = try data.withUnsafeBytes {(buffer: UnsafePointer<UInt8>) in
-            try self.write(buffer: buffer, length: data.count)
+            try self.writeBuffer( buffer, length: data.count)
         }
         
         return data.count
@@ -1064,7 +1069,7 @@ open class OFStream {
         }
         
         _ = try characters.withUnsafeBytes {
-            try self.write(buffer: $0.baseAddress!, length: bufferLength)
+            try self.writeBuffer( $0.baseAddress!, length: bufferLength)
         }
         
         return bufferLength
@@ -1081,7 +1086,7 @@ open class OFStream {
         let length = res.lengthOfBytes(using: .utf8)
         
         _ = try res.withCString {
-            try self.write(buffer: $0, length: length)
+            try self.writeBuffer( $0, length: length)
         }
         
         return length

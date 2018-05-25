@@ -55,20 +55,20 @@ internal extension Thread {
 }
 
 internal extension RunLoop {
-    func execute(_ block: @escaping () -> Swift.Void) {
+    func execute(inMode mode: RunLoopMode = .commonModes, withTimeInterval timInterval: TimeInterval = 0.0, repeats: Bool = false, _ block: @escaping () -> Swift.Void) {
         var timer: Timer
         
         #if os(macOS)
             if #available(OSX 10.12, *) {
-                timer = Timer(timeInterval: 0.0, repeats: false, block: {_ in block()})
+                timer = Timer(timeInterval: timInterval, repeats: repeats, block: {_ in block()})
             } else {
                 let ctx = __TimerContext(block: block)
-                timer = Timer(timeInterval: 0.0, target: ctx, selector: #selector(__TimerContext.executeBlock), userInfo: nil, repeats: false)
+                timer = Timer(timeInterval: timInterval, target: ctx, selector: #selector(__TimerContext.executeBlock), userInfo: nil, repeats: repeats)
             }
         #else
-            timer = Timer(timeInterval: 0.0, repeats: false, block: {_ in block()})
+            timer = Timer(timeInterval: timInterval, repeats: repeats, block: {_ in block()})
         #endif
         
-        self.add(timer, forMode: .commonModes)
+        self.add(timer, forMode: mode)
     }
 }
