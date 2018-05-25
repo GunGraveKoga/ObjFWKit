@@ -174,17 +174,17 @@ internal struct ReadLineQueueItem: QueueItem {
     }
 }
 
-internal struct AcceptQueueItem<T>: QueueItem where T: OFTCPSocket {
-    private var _block: (T, T?, Error?) -> Bool
+internal struct AcceptQueueItem: QueueItem {
+    private var _block: (OFTCPSocket, OFTCPSocket?, Error?) -> Bool
     
-    init(_ block: @escaping (T, T?, Error?) -> Bool) {
+    init(_ block: @escaping (OFTCPSocket, OFTCPSocket?, Error?) -> Bool) {
         self._block = block
     }
     
     mutating func handleObject(_ object: AnyObject?) -> Bool {
-        let listeningSocket = object as! T
+        let listeningSocket = object as! OFTCPSocket
         
-        var newSocket: T? = nil
+        var newSocket: OFTCPSocket? = nil
         var exception: Error? = nil
         
         do {
@@ -402,6 +402,15 @@ public final class StreamObserver {
         let queueItem = WriteQueueItem(buffer, length, block)
         
         self._addObjectForWriting(stream, withQueueItem: queueItem)
+    }
+    
+    internal func _addAsyncAcceptForTCPSocket(_ socket: OFTCPSocket, block: @escaping (OFTCPSocket, OFTCPSocket?, Error?) -> Bool) {
+        
+        let queueItem = AcceptQueueItem(block)
+        
+        socket._socket.enableCallBacks([.acceptCallBack])
+        
+        self._addObjectForReading(socket, withQueueItem: queueItem)
     }
     
     internal func _addAsyncReceiveForUDPSocket(_ socket: OFUDPSocket, buffer: UnsafeMutableRawPointer, length: Int, block: @escaping OFUDPAsyncReceiveBlock) {

@@ -260,6 +260,7 @@ open class OFStreamSocket: OFStream, OFReadyForReadingObserving, OFReadyForWriti
             throw OFException.notOpen(stream: self)
         }
         
+        
         CloseSocket(_socket)
         _socket = nil
         _atEndOfStream = false

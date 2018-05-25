@@ -52,7 +52,7 @@ fileprivate func processSocketEvents(_ socketObject: CFSocket?, _ callbackType: 
     
     let unmanaged = Unmanaged<Socket>.fromOpaque(info).takeUnretainedValue()
     
-    if callbackType.contains(.readCallBack) {
+    if callbackType.contains(.readCallBack) || callbackType.contains(.acceptCallBack) {
         StreamObserver.current.sourceReadyForReading(unmanaged.runLoopSource)
     }
     

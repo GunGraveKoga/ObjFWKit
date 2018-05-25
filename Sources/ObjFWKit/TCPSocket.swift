@@ -217,7 +217,7 @@ open class OFTCPSocket: OFStreamSocket {
         self.listening = true
     }
     
-    open func accept<T>() throws -> T where T: OFTCPSocket {
+    open func accept() throws -> OFTCPSocket {
         
         let (socket, address) = AcceptSocket(self._socket)
         
@@ -225,7 +225,7 @@ open class OFTCPSocket: OFStreamSocket {
             throw OFException.acceptFailed(socket: self, error: _socket_errno())
         }
         
-        let client = T()
+        let client = type(of: self).init()
         
         client._socket = socket
         client._address = address
@@ -242,8 +242,8 @@ open class OFTCPSocket: OFStreamSocket {
         return client
     }
     
-    open func asyncAccept<T>(_ body: @escaping (T, T?, Error?) -> Bool) where T: OFTCPSocket {
-        
+    open func asyncAccept(_ body: @escaping (OFTCPSocket, OFTCPSocket?, Error?) -> Bool) {
+        StreamObserver.current._addAsyncAcceptForTCPSocket(self, block: body)
     }
     
     open func isKeepAliveEnabled() throws -> Bool {
