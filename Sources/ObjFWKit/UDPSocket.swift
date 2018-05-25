@@ -8,27 +8,27 @@
 import Foundation
 
 open class OFUDPSocket {
-    internal var _socket: OFStreamSocket.Socket!
+    internal var _socket: Socket!
     
     public required init() {
         
     }
     
-    open class func resolveAddressForHost(_ host: String, port: UInt16) throws -> OFStreamSocket.SocketAddress? {
+    open class func resolveAddressForHost(_ host: String, port: UInt16) throws -> SocketAddress? {
         guard let results = try Resolver.resolve(host: host, port: port, type: .datagram) else {
             return nil
         }
         
-        return OFStreamSocket.SocketAddress(results[0].address)
+        return SocketAddress(results[0].address)
     }
     
-    open class func asyncResolveAddressForHost(_ host: String, port: UInt16, _ body: @escaping (String, UInt16, OFStreamSocket.SocketAddress?, Error?) -> Swift.Void) {
+    open class func asyncResolveAddressForHost(_ host: String, port: UInt16, _ body: @escaping (String, UInt16, SocketAddress?, Error?) -> Swift.Void) {
         
         let runloop = RunLoop.current
         
         Thread.asyncExecute {
             var _error: Error? = nil
-            var _address: OFStreamSocket.SocketAddress? = nil
+            var _address: SocketAddress? = nil
             
             do {
                 _address = try self.resolveAddressForHost(host, port: port)
@@ -42,7 +42,7 @@ open class OFUDPSocket {
         }
     }
     
-    open class func getHostAndPortForAddress(address: inout OFStreamSocket.SocketAddress) throws -> (host: String, port: UInt16) {
+    open class func getHostAndPortForAddress(address: inout SocketAddress) throws -> (host: String, port: UInt16) {
         return try address.withSockAddrPointer {
             return try Resolver.addressToStringAndPort($0, addressLength: $1)
         }
@@ -57,8 +57,8 @@ open class OFUDPSocket {
             throw OFException.bindFailed(host: host, port: port, socket: self, error: _socket_errno())
         }
         
-        if let address = OFStreamSocket.SocketAddress(results[0].address) {
-            _socket = OFStreamSocket.Socket(family: results[0].family, type: results[0].socketType, protocol: results[0].protocol)
+        if let address = SocketAddress(results[0].address) {
+            _socket = Socket(family: results[0].family, type: results[0].socketType, protocol: results[0].protocol)
             
             guard _socket != nil else {
                 throw OFException.bindFailed(host: host, port: port, socket: self, error: _socket_errno())
@@ -92,7 +92,7 @@ open class OFUDPSocket {
                 return port
             }
             
-            let boundAddress = try OFStreamSocket.SocketAddress {
+            let boundAddress = try SocketAddress {
                 guard Resolver.getSockName(_socket, $0, $1) else {
                     let error = _socket_errno()
                     CloseSocket(_socket)
@@ -125,7 +125,7 @@ open class OFUDPSocket {
         }
     }
     
-    open func receive(into buffer: inout UnsafeMutableRawPointer, length: Int) throws -> (length: Int, sender: OFStreamSocket.SocketAddress) {
+    open func receive(into buffer: inout UnsafeMutableRawPointer, length: Int) throws -> (length: Int, sender: SocketAddress) {
         guard _socket != nil else {
             throw OFException.notOpen(stream: self)
         }
@@ -143,7 +143,7 @@ open class OFUDPSocket {
         }
         
         var ret = Int(-1)
-        let sender = OFStreamSocket.SocketAddress {
+        let sender = SocketAddress {
             #if !os(Windows)
                 ret = recvfrom(_socket.rawValue, tmp, length, 0, $0, $1)
             #else
@@ -166,7 +166,7 @@ open class OFUDPSocket {
         StreamObserver.current._addAsyncReceiveForUDPSocket(self, buffer: buffer, length: length, block: body)
     }
     
-    open func send(buffer: UnsafeRawPointer, length: Int, receiver: OFStreamSocket.SocketAddress) throws {
+    open func send(buffer: UnsafeRawPointer, length: Int, receiver: SocketAddress) throws {
         guard _socket != nil else {
             throw OFException.notOpen(stream: self)
         }
@@ -191,7 +191,7 @@ open class OFUDPSocket {
         }
     }
     
-    open func asyncSend(buffer: inout UnsafeRawPointer, length: Int, receiver: OFStreamSocket.SocketAddress, _ body: @escaping OFUDPAsyncSendBlock) {
+    open func asyncSend(buffer: inout UnsafeRawPointer, length: Int, receiver: SocketAddress, _ body: @escaping OFUDPAsyncSendBlock) {
         
         StreamObserver.current._addAsyncSendForUDPSocket(self, buffer: buffer, length: length, receiver: receiver, block: body)
     }

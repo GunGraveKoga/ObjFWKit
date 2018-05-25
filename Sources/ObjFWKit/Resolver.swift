@@ -33,16 +33,16 @@ public enum Resolver {
     public struct AddressInfo {
         private var _info: UnsafeMutablePointer<addrinfo>!
         
-        public var family: OFStreamSocket.SocketProtocolFamily! {
-            return OFStreamSocket.SocketProtocolFamily(rawValue: _info.pointee.ai_family)
+        public var family: SocketProtocolFamily! {
+            return SocketProtocolFamily(rawValue: _info.pointee.ai_family)
         }
         
-        public var socketType: OFStreamSocket.SocketType! {
-            return OFStreamSocket.SocketType(rawValue: _info.pointee.ai_socktype)
+        public var socketType: SocketType! {
+            return SocketType(rawValue: _info.pointee.ai_socktype)
         }
         
-        public var `protocol`: OFStreamSocket.SocketProtocol! {
-            return OFStreamSocket.SocketProtocol(rawValue: _info.pointee.ai_protocol)
+        public var `protocol`: SocketProtocol! {
+            return SocketProtocol(rawValue: _info.pointee.ai_protocol)
         }
         
         public var address: UnsafeMutablePointer<sockaddr>! {
@@ -122,7 +122,7 @@ public enum Resolver {
     
     fileprivate static let _lock = NSLock()
     
-    public static func resolve(host: String, port: UInt16, type: OFStreamSocket.SocketType) throws -> ResolverResults? {
+    public static func resolve(host: String, port: UInt16, type: SocketType) throws -> ResolverResults? {
         
         var hints = addrinfo()
         hints.ai_family = AF_UNSPEC
@@ -195,7 +195,7 @@ public enum Resolver {
         return (host, port)
     }
     
-    public static func getSockName(_ socket: OFStreamSocket.Socket, _ addr: UnsafeMutablePointer<sockaddr>!, _ addrlen: UnsafeMutablePointer<socklen_t>!) -> Bool {
+    public static func getSockName(_ socket: Socket, _ addr: UnsafeMutablePointer<sockaddr>!, _ addrlen: UnsafeMutablePointer<socklen_t>!) -> Bool {
         _lock.lock()
         
         defer {

@@ -37,7 +37,7 @@ open class OFTCPSocket: OFStreamSocket {
     
     public internal(set) var listening: Bool = false
     
-    internal var _address: OFStreamSocket.SocketAddress!
+    internal var _address: SocketAddress!
     
     public var SOCKS5Host: String? = OFTCPSocket.SOCKS5Host
     public var SOCKS5Port: UInt16 = OFTCPSocket.SOCKS5Port
@@ -66,7 +66,7 @@ open class OFTCPSocket: OFStreamSocket {
         
         if let results = try Resolver.resolve(host: _host, port: _port, type: .stream) {
             for addressInfo in results {
-                if let address = OFStreamSocket.SocketAddress(addressInfo.address) {
+                if let address = SocketAddress(addressInfo.address) {
                     _socket = Socket.init(family: addressInfo.family, type: addressInfo.socketType, protocol: addressInfo.protocol)
                     
                     if _socket == nil {
@@ -172,7 +172,7 @@ open class OFTCPSocket: OFStreamSocket {
                 return port
             }
             
-            let boundAddress = try OFStreamSocket.SocketAddress {
+            let boundAddress = try SocketAddress {
                 guard Resolver.getSockName(_socket, $0, $1) else {
                     let error = _socket_errno()
                     CloseSocket(_socket)
@@ -318,7 +318,7 @@ open class OFTCPSocket: OFStreamSocket {
 }
 
 @inline(__always)
-fileprivate func sendOrThrow(_ self: OFTCPSocket, _ socket: OFStreamSocket.Socket, _ buffer: UnsafeMutablePointer<CChar>!, _ len: Int32) throws {
+fileprivate func sendOrThrow(_ self: OFTCPSocket, _ socket: Socket, _ buffer: UnsafeMutablePointer<CChar>!, _ len: Int32) throws {
     var bytesWritten: Int
     
     #if os(Windows)
@@ -338,7 +338,7 @@ fileprivate func sendOrThrow(_ self: OFTCPSocket, _ socket: OFStreamSocket.Socke
 }
 
 @inline(__always)
-fileprivate func recvExact(_ self: OFTCPSocket, _ socket: OFStreamSocket.Socket, _ buffer: UnsafeMutablePointer<CChar>!, _ len: Int32) throws {
+fileprivate func recvExact(_ self: OFTCPSocket, _ socket: Socket, _ buffer: UnsafeMutablePointer<CChar>!, _ len: Int32) throws {
     var length = Int(len)
     var _buffer = buffer
     

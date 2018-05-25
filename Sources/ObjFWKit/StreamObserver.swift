@@ -249,7 +249,7 @@ internal struct WriteQueueItem: QueueItem {
     }
 }
 
-public typealias OFUDPAsyncReceiveBlock = (OFUDPSocket, UnsafeMutableRawPointer, Int, OFStreamSocket.SocketAddress?, Error?) -> Bool
+public typealias OFUDPAsyncReceiveBlock = (OFUDPSocket, UnsafeMutableRawPointer, Int, SocketAddress?, Error?) -> Bool
 
 internal struct UDPReceiveQueueItem: QueueItem {
     private var _block: OFUDPAsyncReceiveBlock
@@ -266,7 +266,7 @@ internal struct UDPReceiveQueueItem: QueueItem {
         let stream = object as! OFUDPSocket
         
         var length = Int(0)
-        var receiver: OFStreamSocket.SocketAddress? = nil
+        var receiver: SocketAddress? = nil
         var exception: Error? = nil
         var shouldContinue = false
         
@@ -295,15 +295,15 @@ internal struct UDPReceiveQueueItem: QueueItem {
     }
 }
 
-public typealias OFUDPAsyncSendBlock = (OFUDPSocket, UnsafeMutablePointer<UnsafeRawPointer>, Int, OFStreamSocket.SocketAddress, Error?) -> Int
+public typealias OFUDPAsyncSendBlock = (OFUDPSocket, UnsafeMutablePointer<UnsafeRawPointer>, Int, SocketAddress, Error?) -> Int
 
 internal struct UDPSendQueueItem: QueueItem {
     private var _block: OFUDPAsyncSendBlock
     private var _buffer: UnsafeRawPointer
     private var _length: Int
-    private var _receiver: OFStreamSocket.SocketAddress
+    private var _receiver: SocketAddress
     
-    init(_ buffer: UnsafeRawPointer, _ length: Int, _ receiver: OFStreamSocket.SocketAddress, _ block: @escaping OFUDPAsyncSendBlock) {
+    init(_ buffer: UnsafeRawPointer, _ length: Int, _ receiver: SocketAddress, _ block: @escaping OFUDPAsyncSendBlock) {
         self._block = block
         self._buffer = buffer
         self._length = length
@@ -415,7 +415,7 @@ public final class StreamObserver {
         self._addObjectForReading(socket, withQueueItem: queueItem)
     }
     
-    internal func _addAsyncSendForUDPSocket(_ socket: OFUDPSocket, buffer: UnsafeRawPointer, length: Int, receiver: OFStreamSocket.SocketAddress, block: @escaping OFUDPAsyncSendBlock) {
+    internal func _addAsyncSendForUDPSocket(_ socket: OFUDPSocket, buffer: UnsafeRawPointer, length: Int, receiver: SocketAddress, block: @escaping OFUDPAsyncSendBlock) {
         
         guard let _ = socket as? OFReadyForWritingObserving else {
             preconditionFailure("Not implemented")
