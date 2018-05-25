@@ -41,8 +41,14 @@ internal struct ReadQueueItem: QueueItem {
             
             shouldContinue = _block(stream, _buffer, length, exception)
             
-            if (try! stream.atEndOfStream()) {
-                return (exception == nil) ? shouldContinue : false
+            do {
+                if try stream.atEndOfStream() {
+                    return (exception == nil) ? shouldContinue : false
+                }
+                
+            } catch {
+                _buffer.initializeMemory(as: UInt8.self, to: 0)
+                return _block(stream, _buffer, -1, error)
             }
             
             length = 0
@@ -84,14 +90,27 @@ internal struct ExactReadQueueItem: QueueItem {
             }
             _readLength += length
             
-            if _readLength != _exactLength && !(try! stream.atEndOfStream()) && exception == nil {
-                return true
+            do {
+                if _readLength != _exactLength, try !stream.atEndOfStream() && exception == nil {
+                    return true
+                }
+            } catch {
+                _ = _block(stream, _buffer, length, error)
+                
+                return false
             }
             
             shouldContinue = _block(stream, _buffer, length, exception)
             
-            if (try! stream.atEndOfStream()) {
-                return shouldContinue
+            do {
+                if try stream.atEndOfStream() {
+                    return shouldContinue
+                }
+            } catch {
+                _buffer.initializeMemory(as: UInt8.self, to: 0)
+                _ = _block(stream, _buffer, -1, error)
+                
+                return false
             }
             
             length = 0
@@ -128,14 +147,22 @@ internal struct ReadLineQueueItem: QueueItem {
                 exception = error
             }
             
-            if line == nil && !(try! stream.atEndOfStream()) && exception == nil {
-                return true
+            do {
+                if line == nil, try !stream.atEndOfStream() && exception == nil {
+                    return true
+                }
+            } catch {
+                return _block(stream, line, error)
             }
             
             shouldContinue = _block(stream, line, exception)
             
-            if (try! stream.atEndOfStream()) {
-                return shouldContinue
+            do {
+                if try stream.atEndOfStream() {
+                    return shouldContinue
+                }
+            } catch {
+                return _block(stream, nil, error)
             }
             
             line = nil
