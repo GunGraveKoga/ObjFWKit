@@ -124,7 +124,8 @@ fileprivate class OFHTTPClient_SyncPerformer: OFHTTPClientDelegate {
         do {
             try _client.asyncPerformRequest(request, redirects: redirects, context: context)
             
-            RunLoop.current.run()
+            CFRunLoopRun()
+            
         } catch {
             _error = error
         }
@@ -134,20 +135,22 @@ fileprivate class OFHTTPClient_SyncPerformer: OFHTTPClientDelegate {
     
     func client(_ client: OFHTTPClient, didPerformRequest request: OFHTTPRequest, response: OFHTTPResponse, context: AnyObject?) {
         
-        CFRunLoopStop(RunLoop.current.getCFRunLoop())
-        
         _response = nil
         _response = response
         
         _delegate?.client(client, didPerformRequest: request, response: response, context: context)
+        
+        CFRunLoopStop(RunLoop.current.getCFRunLoop())
     }
     
     func clien(_ client: OFHTTPClient, didEncounterError error: Error, request: OFHTTPRequest, context: AnyObject?) {
         
-        CFRunLoopStop(RunLoop.current.getCFRunLoop())
-        
         _client.delegate = _delegate
         _error = error
+        _client.delegate?.clien(_client, didEncounterError: error, request: request, context: context)
+        
+        
+        CFRunLoopStop(RunLoop.current.getCFRunLoop())
     }
     
     public func client(_ client: OFHTTPClient, didCreateSocket socket: OFTCPSocket, request: OFHTTPRequest, context: AnyObject?) {
@@ -417,6 +420,8 @@ fileprivate class OFHTTPClientRequestHandler {
                 _client._inProgress = false
                 
                 try _client.asyncPerformRequest(newRequest, redirects: _redirects - 1, context: _context)
+                
+                return
             }
         }
         
@@ -505,7 +510,7 @@ fileprivate class OFHTTPClientRequestHandler {
             tmp = header.index(after: tmp)
         } while header[tmp] == " "
         
-        var value = String(header[tmp...header.endIndex])
+        var value = String(header[tmp..<header.endIndex])
         
         if let old = _serverHeaders[key] {
             value = old + "," + value

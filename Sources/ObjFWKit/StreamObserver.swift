@@ -333,9 +333,9 @@ public final class StreamObserver {
     private var _readQueue: [CFRunLoopSource: (AnyObject, [QueueItem])] = [CFRunLoopSource: (AnyObject, [QueueItem])]()
     private var _writeQueue: [CFRunLoopSource: (AnyObject, [QueueItem])] = [CFRunLoopSource: (AnyObject, [QueueItem])]()
     
-    internal func _addAsyncReadForStream<T: OFStream>(_ stream: T, buffer: UnsafeMutableRawPointer, length: Int, block: @escaping OFAsyncReadBufferBlock) {
+    internal func _addAsyncReadForStream(_ stream: OFStream, buffer: UnsafeMutableRawPointer, length: Int, block: @escaping OFAsyncReadBufferBlock) {
         
-        guard let _ = T.self as? OFReadyForReadingObserving.Type else {
+        guard let _ = stream as? OFReadyForReadingObserving else {
             preconditionFailure("Not implemented")
         }
         
@@ -344,9 +344,9 @@ public final class StreamObserver {
         self._addObjectForReading(stream, withQueueItem: queueItem)
     }
     
-    internal func _addAsyncReadForStream<T: OFStream>(_ stream: T, buffer: UnsafeMutableRawPointer, exactLength length: Int, block: @escaping OFAsyncReadBufferBlock) {
+    internal func _addAsyncReadForStream(_ stream: OFStream, buffer: UnsafeMutableRawPointer, exactLength length: Int, block: @escaping OFAsyncReadBufferBlock) {
         
-        guard let _ = T.self as? OFReadyForReadingObserving.Type else {
+        guard let _ = stream as? OFReadyForReadingObserving else {
             preconditionFailure("Not implemented")
         }
         
@@ -355,9 +355,9 @@ public final class StreamObserver {
         self._addObjectForReading(stream, withQueueItem: queueItem)
     }
     
-    internal func _addAsyncReadLineForStream<T: OFStream>(_ stream: T, encoding: String.Encoding, block: @escaping OFAsyncReadLineBlock) {
+    internal func _addAsyncReadLineForStream(_ stream: OFStream, encoding: String.Encoding, block: @escaping OFAsyncReadLineBlock) {
         
-        guard let _ = T.self as? OFReadyForReadingObserving.Type else {
+        guard let _ = stream as? OFReadyForReadingObserving else {
             preconditionFailure("Not implemented")
         }
         
@@ -366,9 +366,9 @@ public final class StreamObserver {
         self._addObjectForReading(stream, withQueueItem: queueItem)
     }
     
-    internal func _addAsyncWriteForStream<T: OFStream>(_ stream: T, buffer: UnsafeRawPointer, length: Int, block: @escaping OFAsyncWriteBufferBlock) {
+    internal func _addAsyncWriteForStream(_ stream: OFStream, buffer: UnsafeRawPointer, length: Int, block: @escaping OFAsyncWriteBufferBlock) {
         
-        guard let _ = T.self as? OFReadyForWritingObserving.Type else {
+        guard let _ = stream as? OFReadyForWritingObserving else {
             preconditionFailure("Not implemented")
         }
         
@@ -377,9 +377,9 @@ public final class StreamObserver {
         self._addObjectForWriting(stream, withQueueItem: queueItem)
     }
     
-    internal func _addAsyncReceiveForUDPSocket<T: OFUDPSocket>(_ socket: T, buffer: UnsafeMutableRawPointer, length: Int, block: @escaping OFUDPAsyncReceiveBlock) {
+    internal func _addAsyncReceiveForUDPSocket(_ socket: OFUDPSocket, buffer: UnsafeMutableRawPointer, length: Int, block: @escaping OFUDPAsyncReceiveBlock) {
         
-        guard let _ = T.self as? OFReadyForReadingObserving.Type else {
+        guard let _ = socket as? OFReadyForReadingObserving else {
             preconditionFailure("Not implemented")
         }
         
@@ -388,9 +388,9 @@ public final class StreamObserver {
         self._addObjectForReading(socket, withQueueItem: queueItem)
     }
     
-    internal func _addAsyncSendForUDPSocket<T: OFUDPSocket>(_ socket: T, buffer: UnsafeRawPointer, length: Int, receiver: OFStreamSocket.SocketAddress, block: @escaping OFUDPAsyncSendBlock) {
+    internal func _addAsyncSendForUDPSocket(_ socket: OFUDPSocket, buffer: UnsafeRawPointer, length: Int, receiver: OFStreamSocket.SocketAddress, block: @escaping OFUDPAsyncSendBlock) {
         
-        guard let _ = T.self as? OFReadyForWritingObserving.Type else {
+        guard let _ = socket as? OFReadyForWritingObserving else {
             preconditionFailure("Not implemented")
         }
         
@@ -455,7 +455,7 @@ public final class StreamObserver {
         
         let runLoop = RunLoop.current.getCFRunLoop()
         
-        CFRunLoopAddSource(runLoop, writingObject.sourceForWriting, CFRunLoopMode.commonModes)
+        CFRunLoopAddSource(runLoop, writingObject.sourceForWriting, CFRunLoopMode.defaultMode)
         
         CFRunLoopWakeUp(runLoop)
     }
@@ -476,7 +476,7 @@ public final class StreamObserver {
     }
     
     public func sourceReadyForWriting(_ object: CFRunLoopSource) {
-        
+        self._processWriteQueue(forSource: object)
     }
     
     private func _processReadBuffers() {
@@ -498,14 +498,32 @@ public final class StreamObserver {
         
         if var first = _readQueue[source]!.1.first {
             if !first.handleObject(_readQueue[source]!.0) {
-                _readQueue[source]!.1.removeFirst()
-                
-                if type(of: _readQueue[source]!.0) == OFStream.self {
-                    let stream = _readQueue[source]!.0 as! OFStream
+                if _readQueue[source]!.1.count > 0 {
                     
-                    if stream.hasDataInReadBuffer && !stream.of_waitForDelimiter() {
-                        self._processReadQueue(forSource: source)
+                    _readQueue[source]!.1.removeFirst()
+                    
+                    if type(of: _readQueue[source]!.0) == OFStream.self {
+                        let stream = _readQueue[source]!.0 as! OFStream
+                        
+                        if stream.hasDataInReadBuffer && !stream.of_waitForDelimiter() {
+                            self._processReadQueue(forSource: source)
+                        }
                     }
+                }
+            }
+        }
+    }
+    
+    private func _processWriteQueue(forSource source: CFRunLoopSource) {
+        guard _writeQueue[source] != nil else {
+            preconditionFailure("Empty write queue for source \(source)")
+        }
+        
+        if var first = _writeQueue[source]!.1.first {
+            if !first.handleObject(_writeQueue[source]!.0) {
+                if _writeQueue[source]!.1.count > 0 {
+                    
+                    _writeQueue[source]!.1.removeFirst()
                 }
             }
         }

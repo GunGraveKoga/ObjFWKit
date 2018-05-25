@@ -69,6 +69,6 @@ internal extension RunLoop {
             timer = Timer(timeInterval: 0.0, repeats: false, block: {_ in block()})
         #endif
         
-        self.add(timer, forMode: RunLoopMode.commonModes)
+        self.add(timer, forMode: .commonModes)
     }
 }

@@ -87,7 +87,7 @@ open class OFStream {
     
     open func atEndOfStream() throws -> Bool {
         if _readBufferLength > 0 {
-            return true
+            return false
         }
         
         return try self.lowLevelIsAtEndOfStream()
